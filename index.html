@@ -2,1274 +2,419 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Dividi Scontrino Auto</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dividi Scontrino</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#2C1810">
-<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1C1917">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Scontrino">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
-  :root {
-    --cream: #F5EFE0;
-    --parchment: #EDE3CC;
-    --terracotta: #C4622D;
-    --terra-dark: #9E4A1E;
-    --terra-light: #E8885A;
-    --ink: #2C1810;
-    --ink-mid: #5C3D2E;
-    --ink-light: #9B7B6A;
-    --wine: #722F37;
-    --wine-light: #C25E6E;
-    --wine-pale: #F5E6E8;
-    --green: #3A6B4A;
-    --green-pale: #E6F0E8;
-    --gold: #C9A84C;
-    --white: #FDFAF4;
-    --shadow: 0 4px 24px rgba(44,24,16,0.12);
-    --shadow-sm: 0 2px 8px rgba(44,24,16,0.08);
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--cream);
-    background-image:
-      radial-gradient(ellipse at 20% 20%, rgba(196,98,45,0.06) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 80%, rgba(114,47,55,0.06) 0%, transparent 50%);
-    font-family: 'DM Sans', sans-serif;
-    color: var(--ink);
-    min-height: 100vh;
-    padding-bottom: 40px;
-  }
-
-  header {
-    background: var(--ink);
-    padding: 20px 20px 16px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-  }
-  header::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(
-      45deg,
-      transparent,
-      transparent 20px,
-      rgba(255,255,255,0.015) 20px,
-      rgba(255,255,255,0.015) 21px
-    );
-  }
-  header h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.7rem;
-    color: var(--cream);
-    letter-spacing: 0.02em;
-    position: relative;
-  }
-  header h1 span {
-    color: var(--terra-light);
-  }
-  header p {
-    font-size: 0.75rem;
-    color: var(--ink-light);
-    margin-top: 4px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    position: relative;
-  }
-  .header-deco {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 8px;
-    position: relative;
-  }
-  .header-deco span {
-    height: 1px;
-    width: 40px;
-    background: var(--terracotta);
-    opacity: 0.6;
-  }
-  .header-deco em {
-    color: var(--gold);
-    font-style: normal;
-    font-size: 1rem;
-  }
-
-  .container { max-width: 480px; margin: 0 auto; padding: 0 16px; }
-
-  /* === UPLOAD SECTION === */
-  .section {
-    background: var(--white);
-    border-radius: 16px;
-    padding: 20px;
-    margin-top: 20px;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid rgba(196,98,45,0.1);
-  }
-  .section-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.05rem;
-    color: var(--ink);
-    margin-bottom: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .section-title .num {
-    background: var(--terracotta);
-    color: white;
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    font-size: 0.7rem;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 500;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .upload-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-  }
-  .upload-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 14px 8px;
-    background: var(--cream);
-    border: 2px dashed rgba(196,98,45,0.3);
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-  }
-  .upload-btn:active {
-    transform: scale(0.97);
-    background: var(--parchment);
-  }
-  .upload-btn .icon {
-    font-size: 1.8rem;
-    line-height: 1;
-  }
-  .upload-btn .label {
-    font-size: 0.68rem;
-    font-weight: 500;
-    color: var(--ink-mid);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .upload-btn input[type=file] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-    font-size: 100px;
-  }
-  .upload-btn:hover {
-    border-color: var(--terracotta);
-    background: rgba(196,98,45,0.04);
-  }
-
-  .divider {
-    text-align: center;
-    color: var(--ink-light);
-    font-size: 0.75rem;
-    margin: 14px 0 10px;
-    position: relative;
-  }
-  .divider::before, .divider::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    width: 35%;
-    height: 1px;
-    background: var(--parchment);
-  }
-  .divider::before { left: 0; }
-  .divider::after { right: 0; }
-
-  .demo-btn {
-    width: 100%;
-    padding: 10px;
-    background: transparent;
-    border: 1.5px solid var(--parchment);
-    border-radius: 10px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.8rem;
-    color: var(--ink-mid);
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-  }
-  .demo-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
-  .demo-btn:active { transform: scale(0.98); }
-
-  /* === STATUS === */
-  .status-bar {
-    display: none;
-    background: var(--ink);
-    color: var(--cream);
-    border-radius: 12px;
-    padding: 12px 16px;
-    margin-top: 16px;
-    font-size: 0.82rem;
-    align-items: center;
-    gap: 10px;
-  }
-  .status-bar.visible { display: flex; }
-  .spinner {
-    width: 18px; height: 18px;
-    border: 2px solid rgba(245,239,224,0.2);
-    border-top-color: var(--terra-light);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    flex-shrink: 0;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* === ROWS TABLE === */
-  .rows-section { display: none; }
-  .rows-section.visible { display: block; }
-
-  .row-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--parchment);
-    animation: fadeIn 0.3s ease both;
-  }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
-  .row-item:last-child { border-bottom: none; }
-
-  .row-desc {
-    flex: 1;
-    font-size: 0.85rem;
-    color: var(--ink);
-    background: transparent;
-    border: none;
-    font-family: 'DM Sans', sans-serif;
-    padding: 4px 6px;
-    border-radius: 6px;
-    min-width: 0;
-  }
-  .row-desc:focus {
-    outline: none;
-    background: var(--cream);
-  }
-
-  .row-price {
-    width: 64px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--ink);
-    background: transparent;
-    border: none;
-    font-family: 'DM Sans', sans-serif;
-    text-align: right;
-    padding: 4px 4px;
-    border-radius: 6px;
-  }
-  .row-price:focus {
-    outline: none;
-    background: var(--cream);
-  }
-
-  .tag-btn {
-    padding: 3px 8px;
-    border-radius: 20px;
-    font-size: 0.65rem;
-    font-weight: 500;
-    letter-spacing: 0.03em;
-    cursor: pointer;
-    border: none;
-    transition: all 0.15s;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .tag-wine { background: var(--wine-pale); color: var(--wine); }
-  .tag-wine:active, .tag-wine.active { background: var(--wine); color: white; }
-  .tag-food { background: var(--green-pale); color: var(--green); }
-  .tag-food:active, .tag-food.active { background: var(--green); color: white; }
-
-  .uncertain-row .row-desc,
-  .uncertain-row .row-price {
-    background: #FFF8E1;
-    border-radius: 6px;
-  }
-  .uncertain-badge {
-    font-size: 0.6rem;
-    color: var(--gold);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    flex-shrink: 0;
-  }
-
-  .delete-row {
-    background: none;
-    border: none;
-    color: var(--ink-light);
-    cursor: pointer;
-    font-size: 0.9rem;
-    padding: 2px 4px;
-    border-radius: 4px;
-    flex-shrink: 0;
-    transition: color 0.15s;
-  }
-  .delete-row:hover { color: var(--terracotta); }
-
-  .add-row-btn {
-    width: 100%;
-    padding: 8px;
-    background: transparent;
-    border: 1.5px dashed var(--parchment);
-    border-radius: 8px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.78rem;
-    color: var(--ink-light);
-    cursor: pointer;
-    margin-top: 8px;
-    transition: all 0.2s;
-    display: flex; align-items: center; justify-content: center; gap: 6px;
-  }
-  .add-row-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
-
-  /* === RIEPILOGO === */
-  .riepilogo { display: none; }
-  .riepilogo.visible { display: block; }
-
-  .totals-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-  .total-card {
-    padding: 14px;
-    border-radius: 12px;
-    text-align: center;
-  }
-  .total-card.wine { background: var(--wine-pale); }
-  .total-card.food { background: var(--green-pale); }
-  .total-card .label {
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 500;
-    margin-bottom: 4px;
-  }
-  .total-card.wine .label { color: var(--wine); }
-  .total-card.food .label { color: var(--green); }
-  .total-card .value {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.4rem;
-    font-weight: 700;
-  }
-  .total-card.wine .value { color: var(--wine); }
-  .total-card.food .value { color: var(--green); }
-
-  .persona-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .persona-card {
-    background: var(--cream);
-    border-radius: 14px;
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border: 1.5px solid transparent;
-    transition: border-color 0.2s;
-  }
-  .persona-card.A { border-color: rgba(196,98,45,0.25); }
-  .persona-card.B { border-color: rgba(114,47,55,0.25); }
-  .persona-card.C { border-color: rgba(58,107,74,0.25); }
-
-  .persona-avatar {
-    width: 40px; height: 40px;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-family: 'Playfair Display', serif;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: white;
-    flex-shrink: 0;
-  }
-  .A .persona-avatar { background: var(--terracotta); }
-  .B .persona-avatar { background: var(--wine); }
-  .C .persona-avatar { background: var(--green); }
-
-  .persona-info { flex: 1; }
-  .persona-name {
-    font-weight: 500;
-    font-size: 0.85rem;
-    color: var(--ink);
-    margin-bottom: 2px;
-  }
-  .persona-breakdown {
-    font-size: 0.7rem;
-    color: var(--ink-light);
-  }
-  .persona-total {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--ink);
-  }
-
-  .grand-total {
-    background: var(--ink);
-    color: var(--cream);
-    border-radius: 14px;
-    padding: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 12px;
-  }
-  .grand-total .label {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--ink-light);
-  }
-  .grand-total .value {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--gold);
-  }
-
-  .calcola-btn {
-    width: 100%;
-    padding: 15px;
-    background: var(--terracotta);
-    color: white;
-    border: none;
-    border-radius: 14px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-top: 4px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    letter-spacing: 0.02em;
-  }
-  .calcola-btn:active { transform: scale(0.99); background: var(--terra-dark); }
-  .calcola-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  .reset-btn {
-    width: 100%;
-    padding: 10px;
-    background: transparent;
-    border: 1.5px solid var(--parchment);
-    border-radius: 12px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.8rem;
-    color: var(--ink-mid);
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-top: 10px;
-    display: flex; align-items: center; justify-content: center; gap: 6px;
-  }
-  .reset-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
-
-  .legend {
-    font-size: 0.7rem;
-    color: var(--ink-light);
-    text-align: center;
-    margin-top: 16px;
-    line-height: 1.6;
-    padding: 10px 14px;
-    background: var(--cream);
-    border-radius: 10px;
-  }
-  .legend strong { color: var(--ink-mid); }
-
-  .toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: var(--ink);
-    color: var(--cream);
-    padding: 10px 18px;
-    border-radius: 24px;
-    font-size: 0.8rem;
-    opacity: 0;
-    transition: all 0.3s;
-    z-index: 999;
-    white-space: nowrap;
-  }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-  .rows-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-  }
-  .rows-count {
-    font-size: 0.72rem;
-    color: var(--ink-light);
-    background: var(--cream);
-    padding: 3px 8px;
-    border-radius: 10px;
-  }
-
-  .image-preview {
-    width: 100%;
-    max-height: 160px;
-    object-fit: cover;
-    border-radius: 10px;
-    margin-top: 12px;
-    display: none;
-  }
-  .image-preview.visible { display: block; }
+:root {
+  --bg:#F7F3ED;--card:#FFFFFF;--ink:#1C1917;--ink2:#78716C;--ink3:#A8A29E;
+  --border:#E7E0D8;--terra:#C2571A;--terra2:#E8825A;--wine:#7C2D3F;
+  --wine-bg:#FDF2F4;--food:#2D6A4F;--food-bg:#F0FAF5;--disc:#1D4ED8;
+  --disc-bg:#EFF6FF;--r:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--ink);min-height:100vh;padding-bottom:60px}
+.header{background:var(--ink);padding:20px 20px 18px;text-align:center}
+.header h1{font-family:'Lora',serif;font-size:1.5rem;color:#F7F3ED}
+.header h1 em{color:var(--terra2);font-style:normal}
+.header p{font-size:.7rem;color:#78716C;margin-top:3px;letter-spacing:.08em;text-transform:uppercase}
+.wrap{max-width:480px;margin:0 auto;padding:0 14px}
+.card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);padding:18px;margin-top:14px}
+.card-title{font-family:'Lora',serif;font-size:1rem;color:var(--ink);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.badge{background:var(--terra);color:#fff;width:22px;height:22px;border-radius:50%;font-family:'DM Sans',sans-serif;font-size:.7rem;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.upload-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.upload-btn{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:14px 6px;background:var(--bg);border:1.5px dashed var(--border);border-radius:12px;cursor:pointer;transition:border-color .15s,background .15s;overflow:hidden}
+.upload-btn:active{background:#EDE8E0;border-color:var(--terra)}
+.upload-btn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:100px}
+.upload-btn .ico{font-size:1.6rem;line-height:1}
+.upload-btn .lbl{font-size:.65rem;font-weight:500;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em}
+.sep{text-align:center;color:var(--ink3);font-size:.72rem;margin:12px 0 8px;position:relative}
+.sep::before,.sep::after{content:'';position:absolute;top:50%;width:40%;height:1px;background:var(--border)}
+.sep::before{left:0}.sep::after{right:0}
+.btn-ghost{width:100%;padding:10px;background:transparent;border:1.5px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--ink2);cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px}
+.btn-ghost:hover{border-color:var(--terra);color:var(--terra)}
+.status-bar{display:none;margin-top:12px;background:var(--ink);color:#F7F3ED;border-radius:12px;padding:11px 14px;font-size:.8rem;align-items:center;gap:10px}
+.status-bar.on{display:flex}
+.spin{width:16px;height:16px;flex-shrink:0;border:2px solid rgba(247,243,237,.15);border-top-color:var(--terra2);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rows-section{display:none}.rows-section.on{display:block}
+.rows-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.rows-hint{font-size:.7rem;color:var(--ink3)}
+.rows-count{font-size:.7rem;color:var(--ink2);background:var(--bg);padding:3px 8px;border-radius:20px;border:1px solid var(--border)}
+.row{display:flex;align-items:center;gap:6px;padding:9px 0;border-bottom:1px solid var(--border);animation:fadeUp .25s ease both}
+.row:last-child{border-bottom:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.row-desc{flex:1;font-size:.84rem;color:var(--ink);background:transparent;border:none;font-family:'DM Sans',sans-serif;padding:3px 4px;border-radius:6px;min-width:0}
+.row-desc:focus{outline:none;background:var(--bg)}
+.row-price{width:62px;font-size:.84rem;font-weight:500;text-align:right;background:transparent;border:none;font-family:'DM Sans',sans-serif;padding:3px 4px;border-radius:6px}
+.row-price:focus{outline:none;background:var(--bg)}
+.row-price.neg{color:var(--disc)}
+.tag{padding:3px 9px;border-radius:20px;font-size:.63rem;font-weight:500;letter-spacing:.02em;cursor:pointer;border:none;white-space:nowrap;flex-shrink:0;transition:all .15s}
+.tag.wine{background:var(--wine-bg);color:var(--wine)}
+.tag.wine.on{background:var(--wine);color:#fff}
+.tag.food{background:var(--food-bg);color:var(--food)}
+.tag.food.on{background:var(--food);color:#fff}
+.tag.disc{background:var(--disc-bg);color:var(--disc);cursor:default}
+.row-del{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:.85rem;padding:2px 3px;border-radius:4px;transition:color .15s;flex-shrink:0}
+.row-del:hover{color:var(--terra)}
+.uncertain .row-desc,.uncertain .row-price{background:#FFFBEB;border-radius:6px}
+.add-row{width:100%;margin-top:8px;padding:8px;background:transparent;border:1.5px dashed var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:.76rem;color:var(--ink3);cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
+.add-row:hover{border-color:var(--terra);color:var(--terra)}
+.btn-primary{width:100%;padding:14px;margin-top:12px;background:var(--terra);color:#fff;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:.9rem;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-primary:active{background:#A8431A;transform:scale(.99)}
+.result-section{display:none}.result-section.on{display:block}
+.totals{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.total-box{padding:14px;border-radius:12px;text-align:center}
+.total-box.wine{background:var(--wine-bg)}.total-box.food{background:var(--food-bg)}.total-box.disc{background:var(--disc-bg);grid-column:1/-1}
+.total-box .lbl{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;font-weight:500;margin-bottom:4px}
+.total-box.wine .lbl{color:var(--wine)}.total-box.food .lbl{color:var(--food)}.total-box.disc .lbl{color:var(--disc)}
+.total-box .val{font-family:'Lora',serif;font-size:1.4rem;font-weight:600}
+.total-box.wine .val{color:var(--wine)}.total-box.food .val{color:var(--food)}.total-box.disc .val{color:var(--disc)}
+.persona-list{display:flex;flex-direction:column;gap:8px}
+.persona{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;background:var(--bg);border:1.5px solid var(--border)}
+.avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Lora',serif;font-size:1rem;font-weight:600;color:#fff;flex-shrink:0}
+.av-a{background:var(--terra)}.av-b{background:var(--wine)}.av-c{background:var(--food)}
+.persona-info{flex:1}
+.persona-name{font-size:.84rem;font-weight:500}
+.persona-sub{font-size:.68rem;color:var(--ink3);margin-top:1px}
+.persona-amt{font-family:'Lora',serif;font-size:1.2rem;font-weight:600}
+.grand{background:var(--ink);color:#F7F3ED;border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.grand .lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:#78716C}
+.grand .sub{font-size:.72rem;color:#57534E;margin-top:2px}
+.grand .val{font-family:'Lora',serif;font-size:1.45rem;font-weight:600;color:var(--terra2)}
+.legend{font-size:.68rem;color:var(--ink3);text-align:center;line-height:1.6;padding:10px;background:var(--bg);border-radius:8px;margin-top:10px}
+.manual-box{display:none;margin-bottom:12px}.manual-box.on{display:block}
+.manual-note{background:#FFFBEB;border-radius:10px;padding:10px 12px;font-size:.76rem;color:#92400E;margin-bottom:8px;line-height:1.5}
+.manual-box textarea{width:100%;height:120px;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.8rem;color:var(--ink);background:var(--bg);resize:vertical;outline:none;display:block}
+.manual-box textarea:focus{border-color:var(--terra)}
+.img-preview{width:100%;max-height:140px;object-fit:cover;border-radius:10px;margin-top:10px;display:none}
+.img-preview.on{display:block}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--ink);color:#F7F3ED;padding:9px 18px;border-radius:24px;font-size:.78rem;opacity:0;transition:all .25s;z-index:999;white-space:nowrap;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
 <body>
-
-<header>
-  <h1>🍽 Dividi <span>Scontrino</span> Auto</h1>
+<div class="header">
+  <h1>🍽 Dividi <em>Scontrino</em></h1>
   <p>Divisione automatica del conto</p>
-  <div class="header-deco">
-    <span></span>
-    <em>🍷</em>
-    <span></span>
-  </div>
-</header>
-
-<div class="container">
-
-  <!-- STEP 1: Upload -->
-  <div class="section">
-    <div class="section-title">
-      <span class="num">1</span>
-      Carica lo scontrino
+</div>
+<div class="wrap">
+  <div class="card">
+    <div class="card-title"><span class="badge">1</span> Carica lo scontrino</div>
+    <div class="upload-row">
+      <label class="upload-btn"><span class="ico">📄</span><span class="lbl">PDF</span><input type="file" accept="application/pdf" onchange="onFile(this,'pdf')"></label>
+      <label class="upload-btn"><span class="ico">🖼</span><span class="lbl">Immagine</span><input type="file" accept="image/*" onchange="onFile(this,'img')"></label>
+      <label class="upload-btn"><span class="ico">📷</span><span class="lbl">Foto</span><input type="file" accept="image/*" capture="environment" onchange="onFile(this,'img')"></label>
     </div>
-    <div class="upload-grid">
-      <div class="upload-btn">
-        <span class="icon">📄</span>
-        <span class="label">PDF</span>
-        <input type="file" accept="application/pdf" id="pdfInput" onchange="handleFile(this,'pdf')">
-      </div>
-      <div class="upload-btn">
-        <span class="icon">🖼</span>
-        <span class="label">Immagine</span>
-        <input type="file" accept="image/*" id="imgInput" onchange="handleFile(this,'image')">
-      </div>
-      <div class="upload-btn">
-        <span class="icon">📷</span>
-        <span class="label">Foto</span>
-        <input type="file" accept="image/*" capture="environment" id="camInput" onchange="handleFile(this,'image')">
-      </div>
-    </div>
-    <img id="imgPreview" class="image-preview">
-    <div class="divider">oppure</div>
-    <button class="demo-btn" onclick="loadDemo()">🧾 Carica scontrino di esempio</button>
-    <button class="demo-btn" style="margin-top:8px;border-color:rgba(196,98,45,0.3)" onclick="promptApiKey();showToast('API key salvata ✓')">🔑 Imposta API key Anthropic</button>
+    <img id="preview" class="img-preview">
+    <div class="sep">oppure</div>
+    <button class="btn-ghost" onclick="loadDemo()">🧾 Scontrino di esempio</button>
+    <button class="btn-ghost" onclick="setKey()">🔑 API key Anthropic</button>
   </div>
 
-  <!-- Status bar -->
   <div class="status-bar" id="statusBar">
-    <div class="spinner"></div>
-    <span id="statusText">Elaborazione in corso…</span>
+    <div class="spin"></div>
+    <span id="statusMsg">Elaborazione…</span>
   </div>
 
-  <!-- STEP 2: Rows -->
-  <div class="section rows-section" id="rowsSection">
-    <div class="section-title">
-      <span class="num">2</span>
-      Voci estratte
-    </div>
+  <div class="card rows-section" id="rowsSection">
+    <div class="card-title"><span class="badge">2</span> Voci estratte</div>
     <div class="rows-header">
-      <span style="font-size:0.72rem;color:var(--ink-light)">Tocca per modificare · 🍷 = vino · 🥗 = cibo</span>
-      <span class="rows-count" id="rowsCount">0 voci</span>
+      <span class="rows-hint">Tocca per modificare · 🍷 vino · 🥗 cibo</span>
+      <span class="rows-count" id="rowsCount">0</span>
+    </div>
+    <div class="manual-box" id="manualBox">
+      <div class="manual-note" id="manualNote">⚠️ Inserisci le voci manualmente (es: Pasta 9.50)</div>
+      <textarea id="manualText" placeholder="Pasta al pomodoro 9.50&#10;Vino rosso 8.00&#10;Acqua 2.50"></textarea>
+      <button class="btn-primary" style="margin-top:8px" onclick="parseManual()">📋 Analizza testo</button>
     </div>
     <div id="rowsList"></div>
-    <button class="add-row-btn" onclick="addEmptyRow()">＋ Aggiungi voce manuale</button>
-    <button class="calcola-btn" style="margin-top:16px" onclick="calcola()">
-      🔢 Calcola divisione
-    </button>
+    <button class="add-row" onclick="addRow()">＋ Aggiungi voce</button>
+    <button class="btn-primary" onclick="calcola()">🔢 Calcola divisione</button>
   </div>
 
-  <!-- STEP 3: Results -->
-  <div class="section riepilogo" id="riepilogo">
-    <div class="section-title">
-      <span class="num">3</span>
-      Riepilogo
-    </div>
-    <div class="totals-grid" id="totalsGrid"></div>
-    <div class="persona-cards" id="personaCards"></div>
-    <div class="grand-total" id="grandTotal"></div>
-    <div class="legend">
-      <strong>A & B</strong> pagano: cibo ÷ 3 + vino ÷ 2 &nbsp;·&nbsp;
-      <strong>C</strong> paga: solo cibo ÷ 3
-    </div>
-    <button class="reset-btn" onclick="reset()">🔄 Riparti da capo</button>
+  <div class="card result-section" id="resultSection">
+    <div class="card-title"><span class="badge">3</span> Riepilogo</div>
+    <div class="totals" id="totals"></div>
+    <div class="persona-list" id="personas"></div>
+    <div class="grand" id="grand"></div>
+    <div class="legend"><strong>A &amp; B</strong> pagano cibo ÷ 3 + vino ÷ 2 &nbsp;·&nbsp; <strong>C</strong> paga solo cibo ÷ 3</div>
+    <button class="btn-ghost" style="margin-top:12px" onclick="reset()">🔄 Riparti da capo</button>
   </div>
-
 </div>
-
 <div class="toast" id="toast"></div>
 
 <script>
-// ── PDF.js worker ──
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// ── STATE ──
-let rows = []; // {desc, price, isWine, uncertain}
+let rows=[];
+const getKey=()=>localStorage.getItem('ak')||'';
+const saveKey=k=>localStorage.setItem('ak',k.trim());
 
-// ── WINE KEYWORDS ──
-// Parole intere o sottostringe nei nomi degli articoli
-const WINE_KW = [
-  // Vini generici
-  'vino','wine','rosso','bianco','rosé','rose','rosato',
-  // Spumanti e bollicine
-  'prosecco','champagne','spumante','bollicin','frizzante','cava','crémant','cremant',
-  'lambrusco','lambr','moscato','asti',
-  // Vini fermi doc/docg e nomi comuni
-  'brunello','barolo','chianti','amarone','ripasso','valpolicella','soave',
-  'verdicchio','primitivo','nero d'avola','montepulciano','montepu','aglianico',
-  'merlot','cabernet','sangiovese','pinot','sauvignon','riesling','vermentino',
-  'gewurz','gewürz','trebbiano','fiano','greco','falanghina','pecorino',
-  'barbera','dolcetto','nebbiolo','corvina','glera',
-  'friulano','ribolla','collio','doc ','docg','igt ','dop ','masciar','mascare',
-  'montep','sangese','malbec','syrah','shiraz','zinfandel','tempranillo',
-  // Abbrevaizioni supermercato
-  'vn ','v.n.','vno','v.b.','vb ','v.r.','vr ','vin ',
-  'pros','prosc','spum','frz','friz','lamb','mosc',
-  // Birre
-  'birra','beer','birre','bira','lager','ipa','ale','weiss','weizen','pils','pilsner','stout',
-  'bir ','br ','bra ','brw ',
-  // Superalcolici
-  'grappa','amaro','limoncello','rum','gin','vodka','whisky','whiskey',
-  'cognac','calvados','porto','sherry','marsala','sambuca','ouzo',
-  'aperol','campari','spritz','negroni','mojito','cocktail',
-  'superalc','sup.alc','s.alc',
-  // Contenitori (spesso indicano vino/birra)
-  'bottiglia','bottigl','bott.','bt ','bt.','cl','calice','bicchiere',
-  'quartino','carafa','fiasco','magnum','bag in box','fusto',
-  '1/4','1/2','mezzo litro',
-  // Digestivi e aperitivi
-  'digestivo','digestiv','aperitivo','aperit','distillato','liquore','liquor',
-];
-
-// Abbreviazioni che da SOLE indicano vino (match inizio stringa)
-const WINE_ABBR_START = [
-  'vn ','vno ','vns ','vin ','vb ','vr ','vbco','vrso',
-  'bir ','brr ','br. ','bra ',
-  'pros','lamb','spum','frz.',
-  'grp ','grpp','dist','liq ',
-];
-
-function guessWine(desc) {
-  const d = ((desc||'') + ' ').toLowerCase();
-  const direct = WINE_KW.some(k => d.includes(k));
-  if (direct) return {isWine: true, uncertain: false};
-  const abbr = WINE_ABBR_START.some(k => d.startsWith(k));
-  if (abbr) return {isWine: true, uncertain: true};
-  if (/^(vn|vb|vr|br|bir)\s*\d/.test(d)) return {isWine: true, uncertain: true};
-  return {isWine: false, uncertain: false};
+function setKey(){
+  const k=prompt('Incolla la tua API key Anthropic\n(console.anthropic.com → API Keys)',getKey());
+  if(k!==null){saveKey(k);toast('🔑 API key salvata');}
 }
 
-// Rimuove prefissi lettera tipici dei supermercati (PAM, Sigma, ecc.)
-// Es: "T LIMONI RETE" → "Limoni rete", "X FRIULANO" → "Friulano"
-function cleanDesc(desc) {
-  return desc
-    .replace(/^[TCXBFMR]\s+/, '')   // prefisso lettera singola
-    .replace(/^\d+\s*[Xx]\s+/, '') // quantità tipo "2X " o "2 X "
-    .trim();
-}
-
-// ── RECEIPT TEXT PARSER ──
-// Gestisce: formato PAM (3 colonne: NOME  IVA%  PREZZO), formato standard, ristoranti
-function parseReceiptText(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 1);
-  const parsed = [];
-
-  // Righe da saltare
-  const skipRe = /^(totale|subtotale|di cui|^iva\b|imposta|pagamento|pagam|contanti|contant|carta\b|bancomat|pos\b|resto\b|cambio|importo pag|receipt|benven|grazie|welcome|arriveder|documento comm|descrizione\b|raccolta|saldo|spesa val|punti accu|codice a|p\.iva|www\.|http)/i;
-
-  for (const line of lines) {
-    if (skipRe.test(line)) continue;
-    if (/^[-=*_]{3,}/.test(line)) continue;
-
-    let price = null;
-    let desc  = null;
-
-    // ── Formato PAM: "NOME   22,00%   -1,90" ──
-    // Cattura: qualsiasi testo, spazi, percentuale IVA, spazi, prezzo (anche negativo)
-    const pamRe = /^(.+?)\s{2,}\d{1,2}[.,]\d{2}%\s+(-?\d{1,4}[.,]\d{2})\s*$/;
-    let m = line.match(pamRe);
-    if (m) {
-      desc  = m[1].trim();
-      price = parseFloat(m[2].replace(',', '.'));
-    }
-
-    // ── Formato standard: "NOME   8,45" o "NOME   -1,90" ──
-    if (!m) {
-      const stdRe = /^(.+?)\s{2,}(-?\d{1,4}[.,]\d{2})\s*[€$]?\s*$/;
-      m = line.match(stdRe);
-      if (m) {
-        desc  = m[1].trim();
-        price = parseFloat(m[2].replace(',', '.'));
-      }
-    }
-
-    // ── Formato con simbolo euro: "€8,45" o "-€1,90" ──
-    if (!m) {
-      const euroRe = /^(.+?)\s*-?[€$]\s*(\d{1,4}[.,]\d{2})\s*$/;
-      m = line.match(euroRe);
-      if (m) {
-        price = parseFloat(m[2].replace(',', '.')) * (line.includes('-') ? -1 : 1);
-        desc  = m[1].trim();
-      }
-    }
-
-    if (price === null || isNaN(price) || price === 0 || Math.abs(price) > 999) continue;
-    if (!desc || desc.length < 2) continue;
-
-    // Pulizia descrizione
-    desc = desc.replace(/\s+\d{1,2}[.,]\d{2}%\s*$/, '').trim(); // rimuovi IVA residua
-    desc = cleanDesc(desc);
-    if (!desc || desc.length < 2) continue;
-
-    const isDiscount = price < 0;
-    const g = isDiscount ? {isWine: false, uncertain: false} : guessWine(desc);
-    parsed.push({ desc: capitalize(desc), price, isWine: g.isWine, uncertain: g.uncertain, isDiscount });
-  }
-  return parsed;
-}
-
-function capitalize(s) {
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
-// ── FILE HANDLER ──
-async function handleFile(input, type) {
-  const file = input.files[0];
-  if (!file) return;
-  showStatus('Lettura file…');
-
-  if (type === 'image') {
-    const url = URL.createObjectURL(file);
-    const preview = document.getElementById('imgPreview');
-    preview.src = url;
-    preview.classList.add('visible');
-    await processImage(file);
+async function onFile(input,type){
+  const file=input.files[0];if(!file)return;
+  if(type==='img'){
+    const p=document.getElementById('preview');
+    p.src=URL.createObjectURL(file);p.classList.add('on');
+    await analyzeImage(file);
   } else {
-    document.getElementById('imgPreview').classList.remove('visible');
-    await processPDF(file);
+    document.getElementById('preview').classList.remove('on');
+    await analyzePDF(file);
   }
+  input.value='';
 }
 
-async function processPDF(file) {
-  try {
-    showStatus('Rendering PDF…');
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-
-    // Renderizza SEMPRE tutte le pagine come immagine e manda a Claude.
-    // L'estrazione testo di pdf.js rompe le righe a colonne fisse (es. PAM, Panorama)
-    // causando parsing errato. Claude legge l'immagine visivamente senza questi problemi.
-    const canvases = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      showStatus(`Rendering pagina ${i}/${pdf.numPages}…`);
-      const page = await pdf.getPage(i);
-      const vp = page.getViewport({scale: 2.5}); // alta risoluzione per leggibilità
-      const canvas = document.createElement('canvas');
-      canvas.width = vp.width;
-      canvas.height = vp.height;
-      await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
-      canvases.push(canvas);
+async function analyzePDF(file){
+  try{
+    setStatus('Rendering PDF…');
+    const ab=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+    const cvs=[];
+    for(let i=1;i<=pdf.numPages;i++){
+      setStatus('Rendering pagina '+i+'/'+pdf.numPages+'…');
+      const page=await pdf.getPage(i);
+      const vp=page.getViewport({scale:2.5});
+      const cv=document.createElement('canvas');
+      cv.width=vp.width;cv.height=vp.height;
+      await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+      cvs.push(cv);
     }
-
-    // Se più pagine, le unisce verticalmente in un unico canvas
-    let finalCanvas;
-    if (canvases.length === 1) {
-      finalCanvas = canvases[0];
-    } else {
-      const totalH = canvases.reduce((s, cv) => s + cv.height, 0);
-      finalCanvas = document.createElement('canvas');
-      finalCanvas.width = canvases[0].width;
-      finalCanvas.height = totalH;
-      const ctx = finalCanvas.getContext('2d');
-      let y = 0;
-      for (const cv of canvases) {
-        ctx.drawImage(cv, 0, y);
-        y += cv.height;
-      }
+    let final;
+    if(cvs.length===1){final=cvs[0];}
+    else{
+      const th=cvs.reduce((s,c)=>s+c.height,0);
+      final=document.createElement('canvas');
+      final.width=cvs[0].width;final.height=th;
+      const ctx=final.getContext('2d');let y=0;
+      for(const cv of cvs){ctx.drawImage(cv,0,y);y+=cv.height;}
     }
-
-    showStatus('Analisi con Claude AI…');
-    finalCanvas.toBlob(blob => processImage(blob), 'image/jpeg', 0.92);
-
-  } catch(e) {
-    hideStatus();
-    showToast('Errore PDF: ' + e.message);
-  }
+    const blob=await new Promise(r=>final.toBlob(r,'image/jpeg',0.92));
+    await analyzeImage(blob);
+  }catch(e){noStatus();showManual('Errore PDF: '+e.message);}
 }
 
-// ── API KEY UI ──
-function getApiKey() {
-  return localStorage.getItem('claude_api_key') || '';
-}
-function saveApiKey(k) {
-  localStorage.setItem('claude_api_key', k.trim());
-}
-function promptApiKey() {
-  const existing = getApiKey();
-  const key = window.prompt(
-    'Inserisci la tua API key di Anthropic\n(console.anthropic.com → API Keys)\n\nViene salvata solo nel tuo browser.',
-    existing
-  );
-  if (key !== null) saveApiKey(key);
-  return key?.trim() || '';
-}
-
-// ── Compress image to max ~1MB before sending ──
-async function compressImage(file, maxPx = 1600, quality = 0.82) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
+async function compress(file,maxPx=1800,q=0.88){
+  return new Promise(resolve=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
       URL.revokeObjectURL(url);
-      let {width: w, height: h} = img;
-      if (w > maxPx || h > maxPx) {
-        if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
-        else       { w = Math.round(w * maxPx / h); h = maxPx; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      canvas.toBlob(resolve, 'image/jpeg', quality);
+      let{width:w,height:h}=img;
+      if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      cv.toBlob(resolve,'image/jpeg',q);
     };
-    img.onerror = () => resolve(file); // fallback: usa originale
-    img.src = url;
+    img.onerror=()=>resolve(file);
+    img.src=url;
   });
 }
 
-async function callClaudeAPI(apiKey, base64, mediaType, attempt = 1) {
-  const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  const endpoint = isLocal
-    ? 'http://localhost:8765/api/claude'
-    : 'https://api.anthropic.com/v1/messages';
+async function toBase64(file){
+  return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+}
 
-  const headers = {
-    'Content-Type': 'application/json',
-    'x-api-key': apiKey,
-    'anthropic-version': '2023-06-01',
-  };
-  if (!isLocal) headers['anthropic-dangerous-direct-browser-access'] = 'true';
+const PROMPT=`Sei un esperto contabile italiano. Analizza questo scontrino e restituisci SOLO un array JSON valido.
+Niente markdown, niente backtick, niente testo prima o dopo. Solo il JSON grezzo.
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `Sei un esperto di scontrini italiani. Guarda attentamente questa immagine ed estrai ogni voce con il suo prezzo.
+Formato: [{"desc":"Nome prodotto","price":9.50,"isWine":false}, ...]
 
-Restituisci SOLO un array JSON valido, senza markdown, senza spiegazioni, senza testo aggiuntivo.
+REGOLE PREZZI:
+- Usa punto decimale: 8.45 non 8,45
+- Se ci sono colonne (NOME  IVA%  PREZZO): il prezzo e' l'ULTIMO numero, la colonna IVA ignorala
+- Prezzi negativi = sconti, includili con price negativo (es: -1.90)
+- Cerca bene righe in grassetto con segno meno: sono sconti
 
-Schema per ogni voce:
-{"desc": "stringa", "price": numero, "isWine": booleano}
-
-COME LEGGERE I PREZZI:
-- Leggi sempre l'ULTIMO numero di ogni riga prodotto come prezzo
-- Se c'è una colonna IVA nel mezzo (es: 22%, 10%, 4%) ignorala - non è il prezzo
-- Prezzi negativi (es: -1,90 o scritti in rosso/grassetto con segno meno) sono SCONTI - includili con price negativo
-- Converti virgola in punto: 1,90 → 1.90
-
-COME PULIRE LA DESCRIZIONE:
-- Se la riga inizia con una lettera sola seguita da spazio (T, C, X, B, F, M) rimuovila
+REGOLE DESCRIZIONI:
+- Rimuovi prefisso lettera singola se seguito da spazio: "T Limoni" diventa "Limoni", "X Friulano" diventa "Friulano"
 - Scrivi in italiano leggibile, non tutto maiuscolo
-- Rimuovi la colonna IVA dalla descrizione
+- Non includere la percentuale IVA nella descrizione
 
-COME CLASSIFICARE isWine:
-Metti isWine: true per QUALSIASI bevanda alcolica:
-- Vini fermi: Montepulciano, Friulano, Chianti, Barolo, Brunello, Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Ribolla, Soave, Amarone, Valpolicella, Primitivo, Lambrusco, Moscato, Verdicchio, Nero d'Avola, Barbera, Dolcetto, Negroamaro, Sagrantino, Aglianico
-- Spumanti: Prosecco, Champagne, Spumante, Franciacorta, Cava
-- Birre: Birra, Beer, Lager, IPA, Weiss, Pils, Ale, Stout
-- Superalcolici: Grappa, Amaro, Gin, Vodka, Rum, Whisky, Brandy, Cognac, Limoncello, Aperol, Campari
-- Qualsiasi prodotto con DOC, DOCG, IGT nella descrizione
-- Se il nome del prodotto è un vitigno o una denominazione vinicola italiana
+REGOLE isWine (true per bevande alcoliche):
+Vini: Montepulciano, Friulano, Chianti, Barolo, Brunello, Prosecco, Lambrusco, Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Ribolla, Soave, Amarone, Valpolicella, Primitivo, Negroamaro, Verdicchio, Moscato, Barbera, Dolcetto, Aglianico, Franciacorta + qualsiasi DOC/DOCG/IGT
+Birre: Birra, Beer, Lager, IPA, Weiss, Pils, Ale, Stout
+Alcolici: Grappa, Amaro, Gin, Vodka, Rum, Whisky, Limoncello, Aperol, Campari
 
-NON INCLUDERE:
-- Totale, Totale Complessivo, Subtotale
-- IVA, Di cui IVA
-- Pagamento, Contanti, Carta, Bancomat, Resto, Importo pagato
-- Raccolta punti, Saldo punti, Spesa valida per punti
-- P.IVA, Codice fiscale, Data, Ora, Numero scontrino, Barcode
-- Intestazione negozio, indirizzi, numeri di telefono
+NON INCLUDERE: Totale, Subtotale, IVA, Pagamento, Contanti, Carta, Resto, Importo pagato, Raccolta punti, Saldo, P.IVA, barcode, date, ore, intestazione negozio
 
-Rispondi SOLO con l'array JSON. Esempio:
-[
-  {"desc": "Montepulciano Masciarelli", "price": 8.45, "isWine": true},
-  {"desc": "Sconto Friulano", "price": -1.90, "isWine": false},
-  {"desc": "Molisana passata", "price": 1.50, "isWine": false},
-  {"desc": "Limoni rete kg 1", "price": 2.29, "isWine": false}
-]` }
-        ]
-      }]
-    })
-  });
+Esempio per scontrino PAM (con colonne NOME IVA% PREZZO):
+Input riga: "MONTEPULCIANO MASC   22,00%   8,45"
+Output: {"desc":"Montepulciano Masciarelli","price":8.45,"isWine":true}
 
-  // Retry su 529 (overloaded) o 500
-  if ((response.status === 529 || response.status === 500) && attempt < 3) {
-    const wait = attempt * 2000;
-    showStatus(`Riprovando (${attempt}/3)…`);
-    await new Promise(r => setTimeout(r, wait));
-    return callClaudeAPI(apiKey, base64, mediaType, attempt + 1);
+Input riga: "FRIULANO MARGHE   22,00%   -1,90" (riga in grassetto = sconto)
+Output: {"desc":"Sconto Friulano","price":-1.90,"isWine":false}
+
+Input riga: "T MOLISANA PASSATA   4,00%   1,50"
+Output: {"desc":"Molisana passata","price":1.50,"isWine":false}`;
+
+async function analyzeImage(file,attempt=1){
+  let key=getKey();
+  if(!key){
+    const k=prompt('Inserisci la tua API key Anthropic:');
+    if(!k){showManual('API key necessaria per il riconoscimento automatico.');return;}
+    saveKey(k);key=k.trim();
   }
-
-  return response;
-}
-
-async function processImage(file) {
-  let apiKey = getApiKey();
-  if (!apiKey) {
-    apiKey = promptApiKey();
-    if (!apiKey) {
-      showManualFallback('Inserisci una API key per usare il riconoscimento automatico.');
-      return;
-    }
-  }
-
-  try {
-    showStatus('Compressione immagine…');
-    const compressed = await compressImage(file);
-    const sizeMB = (compressed.size / 1024 / 1024).toFixed(1);
-
-    showStatus(`Analisi scontrino con Claude AI… (${sizeMB} MB)`);
-
-    const base64 = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result.split(',')[1]);
-      r.onerror = rej;
-      r.readAsDataURL(compressed);
-    });
-
-    const response = await callClaudeAPI(apiKey, base64, 'image/jpeg');
-
-    if (response.status === 401) {
-      hideStatus();
-      saveApiKey('');
-      showManualFallback('❌ API key non valida — clicca "Cambia API key" qui sotto.');
-      return;
-    }
-    if (response.status === 400) {
-      const err = await response.json().catch(() => ({}));
-      hideStatus();
-      showManualFallback(`❌ Errore richiesta: ${err?.error?.message || 'immagine non supportata'}`);
-      return;
-    }
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err?.error?.message || `Errore API ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data.content?.map(b => b.text || '').join('
-') || '';
-    if (!text.trim()) throw new Error('Risposta vuota dall'API');
-    finishParsingClaude(text);
-
-  } catch(e) {
-    hideStatus();
-    console.error('Claude Vision error:', e);
-    showManualFallback(`❌ ${e.message || 'Errore di rete'}. Inserisci le voci manualmente:`);
-  }
-}
-
-function finishParsingClaude(rawText) {
-  showDebug(rawText);
-  try {
-    // Rimuovi markdown fences se presenti
-    let clean = rawText.trim()
-      .replace(/^```[\w]*\n?/, '').replace(/```\s*$/, '').trim();
-
-    // Estrai array JSON anche se c'è testo attorno
-    const jsonMatch = clean.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('Nessun array JSON trovato');
-
-    const data = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(data) || data.length === 0) throw new Error('Array vuoto');
-
-    // Claude ha già fatto tutto: desc pulita, price corretto, isWine classificato
-    // Ci fidiamo completamente della sua risposta
-    rows = data
-      .filter(item => {
-        if (!item.desc || typeof item.price !== 'number') return false;
-        if (item.price === 0) return false;
-        if (Math.abs(item.price) > 9999) return false;
-        return true;
+  try{
+    setStatus(attempt===1?'Compressione…':'Nuovo tentativo ('+attempt+'/3)…');
+    const comp=await compress(file);
+    const mb=(comp.size/1024/1024).toFixed(1);
+    setStatus('Analisi con Claude AI… ('+mb+' MB)');
+    const b64=await toBase64(comp);
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({
+        model:'claude-opus-4-5',
+        max_tokens:2048,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+          {type:'text',text:PROMPT}
+        ]}]
       })
-      .map(item => ({
-        desc: item.desc.trim(),
-        price: item.price,
-        isWine: !!item.isWine,
-        uncertain: false,
-        isDiscount: item.price < 0
-      }));
+    });
+    if(resp.status===401){saveKey('');noStatus();showManual('API key non valida. Aggiornala con il tasto apposito.');return;}
+    if((resp.status===529||resp.status===500)&&attempt<3){await new Promise(r=>setTimeout(r,attempt*2000));return analyzeImage(file,attempt+1);}
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+resp.status);}
+    const data=await resp.json();
+    const text=(data.content||[]).map(b=>b.text||'').join('\n').trim();
+    parseClaudeResponse(text);
+  }catch(e){noStatus();console.error(e);showManual('Errore: '+(e.message||'rete')+'. Inserisci manualmente:');}
+}
 
-    hideStatus();
-    if (rows.length === 0) {
-      showManualFallback('Nessuna voce valida trovata. Controlla il pannello debug.');
-      return;
-    }
+function parseClaudeResponse(text){
+  try{
+    const match=text.match(/\[[\s\S]*\]/);
+    if(!match)throw new Error('Nessun JSON');
+    const data=JSON.parse(match[0]);
+    if(!Array.isArray(data)||data.length===0)throw new Error('Array vuoto');
+    rows=data
+      .filter(it=>it.desc&&typeof it.price==='number'&&it.price!==0&&Math.abs(it.price)<9999)
+      .map(it=>({desc:String(it.desc).trim(),price:Number(it.price),isWine:!!it.isWine,uncertain:false,isDiscount:it.price<0}));
+    noStatus();
+    if(rows.length===0){showManual('Nessuna voce trovata. Inserisci manualmente:');return;}
     renderRows();
-    showToast('✓ Estratte ' + rows.length + ' voci');
-
-  } catch(e) {
-    hideStatus();
-    console.error('Errore parsing JSON:', e.message);
-    showManualFallback('❌ Claude non ha restituito JSON valido. Inserisci manualmente o riprova.');
+    toast('✓ '+rows.length+' voci estratte');
+  }catch(e){
+    noStatus();
+    console.error('Parse error:',e.message,'\nRaw:',text);
+    showManual('Errore nel parsing. Inserisci manualmente:');
   }
 }
 
-// ── DEMO DATA ──
-function loadDemo() {
-  rows = [
-    {desc: 'Tagliere misto antipasti', price: 14.00, isWine: false, uncertain: false},
-    {desc: 'Bruschette al pomodoro x2', price: 8.00, isWine: false, uncertain: false},
-    {desc: 'Spaghetti alla carbonara', price: 13.50, isWine: false, uncertain: false},
-    {desc: 'Penne all\'arrabbiata', price: 11.00, isWine: false, uncertain: false},
-    {desc: 'Tagliatelle al ragù', price: 12.00, isWine: false, uncertain: false},
-    {desc: 'Vino rosso della casa (carafa)', price: 9.00, isWine: true, uncertain: false},
-    {desc: 'Prosecco doc cl 75', price: 18.00, isWine: true, uncertain: false},
-    {desc: 'Acqua naturale lt 1', price: 3.00, isWine: false, uncertain: false},
-    {desc: 'Tiramisù x2', price: 9.00, isWine: false, uncertain: false},
-    {desc: 'Panna cotta ai frutti di bosco', price: 5.50, isWine: false, uncertain: false},
-    {desc: 'Amaro digestivo x3', price: 9.00, isWine: true, uncertain: true},
-    {desc: 'Coperto x3', price: 9.00, isWine: false, uncertain: false},
-    {desc: 'Sconto fidelity card', price: -5.00, isWine: false, uncertain: false, isDiscount: true},
-  ];
-  renderRows();
-  showToast('🧾 Scontrino di esempio caricato');
+function parseManual(){
+  const txt=document.getElementById('manualText').value.trim();
+  if(!txt){toast('Inserisci del testo prima');return;}
+  rows=[];
+  for(const line of txt.split('\n').map(l=>l.trim()).filter(Boolean)){
+    const m=line.match(/^(.+?)\s+([-]?\d{1,4}[.,]\d{2})\s*$/);
+    if(!m)continue;
+    const price=parseFloat(m[2].replace(',','.'));
+    if(isNaN(price)||price===0)continue;
+    rows.push({desc:m[1].trim(),price,isWine:false,uncertain:false,isDiscount:price<0});
+  }
+  hideManual();
+  if(rows.length===0){toast('Nessuna voce valida');return;}
+  renderRows();toast('✓ '+rows.length+' voci');
 }
 
-// ── RENDER ──
-function renderRows() {
-  const list = document.getElementById('rowsList');
-  list.innerHTML = '';
-  rows.forEach((r, i) => {
-    const div = document.createElement('div');
-    div.className = 'row-item' + (r.uncertain ? ' uncertain-row' : '');
-    div.setAttribute('data-i', i);
-    const priceColor = r.price < 0 ? 'color:var(--green);font-weight:600' : '';
-    div.innerHTML = `
-      <input class="row-desc" value="${escHtml(r.desc)}" oninput="updateRow(${i},'desc',this.value)" placeholder="Descrizione">
-      <input class="row-price" type="number" step="0.01" value="${r.price.toFixed(2)}" oninput="updateRow(${i},'price',this.value)" style="${priceColor}">
-      ${r.price < 0
-        ? `<span class="tag-btn" style="background:#e6f0e8;color:var(--green);cursor:default">🏷 Sconto</span>`
-        : `<button class="tag-btn ${r.isWine?'tag-wine':'tag-food'} ${r.isWine?'active':''}" onclick="toggleWine(${i})" title="${r.isWine?'Segna come cibo':'Segna come vino'}">
-        ${r.isWine?'🍷 Vino':'🥗 Cibo'}
-      </button>`
-      }
-      ${r.uncertain ? '<span class="uncertain-badge">?</span>' : ''}
-      <button class="delete-row" onclick="deleteRow(${i})" title="Rimuovi">✕</button>
-    `;
+function loadDemo(){
+  rows=[
+    {desc:'Tagliere antipasti misti',price:14.00,isWine:false,uncertain:false,isDiscount:false},
+    {desc:'Spaghetti alla carbonara',price:13.50,isWine:false,uncertain:false,isDiscount:false},
+    {desc:'Penne all\'arrabbiata',price:11.00,isWine:false,uncertain:false,isDiscount:false},
+    {desc:'Vino rosso della casa (carafa)',price:9.00,isWine:true,uncertain:false,isDiscount:false},
+    {desc:'Prosecco DOC cl 75',price:18.00,isWine:true,uncertain:false,isDiscount:false},
+    {desc:'Acqua naturale lt 1',price:3.00,isWine:false,uncertain:false,isDiscount:false},
+    {desc:'Tiramisù x2',price:9.00,isWine:false,uncertain:false,isDiscount:false},
+    {desc:'Sconto fidelity card',price:-5.00,isWine:false,uncertain:false,isDiscount:true},
+    {desc:'Coperto x3',price:9.00,isWine:false,uncertain:false,isDiscount:false},
+  ];
+  renderRows();toast('🧾 Demo caricato');
+}
+
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+
+function renderRows(){
+  const list=document.getElementById('rowsList');
+  list.innerHTML='';
+  rows.forEach((r,i)=>{
+    const div=document.createElement('div');
+    div.className='row'+(r.uncertain?' uncertain':'');
+    const pc=r.price<0?' neg':'';
+    const tagHtml=r.isDiscount
+      ?'<span class="tag disc">🏷 Sconto</span>'
+      :r.isWine
+        ?'<button class="tag wine on" onclick="toggleWine('+i+')">🍷 Vino</button>'
+        :'<button class="tag food on" onclick="toggleWine('+i+')">🥗 Cibo</button>';
+    div.innerHTML=
+      '<input class="row-desc" value="'+esc(r.desc)+'" oninput="rows['+i+'].desc=this.value" placeholder="Descrizione">'+
+      '<input class="row-price'+pc+'" type="number" step="0.01" value="'+r.price.toFixed(2)+'" oninput="rows['+i+'].price=parseFloat(this.value)||0;this.className=\'row-price\'+(rows['+i+'].price<0?\' neg\':\'\')">'+
+      tagHtml+
+      '<button class="row-del" onclick="rows.splice('+i+',1);renderRows()" title="Rimuovi">✕</button>';
     list.appendChild(div);
   });
-  document.getElementById('rowsCount').textContent = rows.length + ' voci';
-  document.getElementById('rowsSection').classList.add('visible');
-  document.getElementById('riepilogo').classList.remove('visible');
+  document.getElementById('rowsCount').textContent=rows.length+' voci';
+  document.getElementById('rowsSection').classList.add('on');
+  document.getElementById('resultSection').classList.remove('on');
 }
 
-function escHtml(s) {
-  return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
-}
+function toggleWine(i){rows[i].isWine=!rows[i].isWine;rows[i].uncertain=false;renderRows();}
 
-function updateRow(i, field, val) {
-  if (field === 'price') rows[i].price = parseFloat(val)||0;
-  else rows[i].desc = val;
-}
-
-function toggleWine(i) {
-  rows[i].isWine = !rows[i].isWine;
-  rows[i].uncertain = false;
+function addRow(){
+  rows.push({desc:'',price:0,isWine:false,uncertain:false,isDiscount:false});
   renderRows();
+  setTimeout(()=>{const ins=document.querySelectorAll('.row-desc');ins[ins.length-1]?.focus();},50);
 }
 
-function deleteRow(i) {
-  rows.splice(i, 1);
-  renderRows();
+function calcola(){
+  const wG=rows.filter(r=>r.isWine&&r.price>0).reduce((s,r)=>s+r.price,0);
+  const fG=rows.filter(r=>!r.isWine&&r.price>0).reduce((s,r)=>s+r.price,0);
+  const dT=rows.filter(r=>r.price<0).reduce((s,r)=>s+r.price,0);
+  const gross=wG+fG;
+  const wR=gross>0?wG/gross:0;
+  const wine=wG+dT*wR;
+  const food=fG+dT*(1-wR);
+  const total=wine+food;
+  const fS=food/3,wS=wine/2;
+  const A=fS+wS,B=fS+wS,C=fS;
+  let tH='<div class="total-box wine"><div class="lbl">🍷 Totale Vino</div><div class="val">€'+wine.toFixed(2)+'</div></div>'+
+    '<div class="total-box food"><div class="lbl">🥗 Totale Cibo</div><div class="val">€'+food.toFixed(2)+'</div></div>';
+  if(dT<0)tH+='<div class="total-box disc"><div class="lbl">🏷 Sconti applicati</div><div class="val">−€'+Math.abs(dT).toFixed(2)+'</div></div>';
+  document.getElementById('totals').innerHTML=tH;
+  document.getElementById('personas').innerHTML=
+    mkP('A','av-a',A,fS,wS)+mkP('B','av-b',B,fS,wS)+mkP('C','av-c',C,fS,null);
+  document.getElementById('grand').innerHTML=
+    '<div><div class="lbl">Totale scontrino</div><div class="sub">'+rows.length+' voci · A+B+C = €'+(A+B+C).toFixed(2)+'</div></div>'+
+    '<div class="val">€'+total.toFixed(2)+'</div>';
+  document.getElementById('resultSection').classList.add('on');
+  document.getElementById('resultSection').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function addEmptyRow() {
-  rows.push({desc:'', price: 0, isWine: false, uncertain: false});
-  renderRows();
-  setTimeout(() => {
-    const inputs = document.querySelectorAll('.row-desc');
-    inputs[inputs.length-1]?.focus();
-  }, 50);
+function mkP(n,av,tot,fS,wS){
+  const sub=wS!=null?'Cibo €'+fS.toFixed(2)+' + Vino €'+wS.toFixed(2):'Solo cibo €'+fS.toFixed(2);
+  return'<div class="persona"><div class="avatar '+av+'">'+n+'</div><div class="persona-info"><div class="persona-name">Persona '+n+'</div><div class="persona-sub">'+sub+'</div></div><div class="persona-amt">€'+tot.toFixed(2)+'</div></div>';
 }
 
-// ── CALCOLA ──
-function calcola() {
-  // Separate discounts from normal items
-  const discountTotal = rows.filter(r => r.price < 0).reduce((s,r)=>s+r.price, 0);
-  const wineGross  = rows.filter(r => r.isWine  && r.price > 0).reduce((s,r)=>s+r.price, 0);
-  const foodGross  = rows.filter(r => !r.isWine && r.price > 0).reduce((s,r)=>s+r.price, 0);
-  const grossTotal = wineGross + foodGross;
-
-  // Distribute discount proportionally between wine and food
-  const wineRatio   = grossTotal > 0 ? wineGross / grossTotal : 0;
-  const wineDiscount = discountTotal * wineRatio;
-  const foodDiscount = discountTotal * (1 - wineRatio);
-
-  const wine  = wineGross + wineDiscount;
-  const food  = foodGross + foodDiscount;
-  const total = wine + food;
-
-  const foodShare = food / 3;
-  const wineShare = wine / 2;
-
-  const A = foodShare + wineShare;
-  const B = foodShare + wineShare;
-  const C = foodShare;
-
-  // Totals grid
-  const discountRow = discountTotal < 0 ? `
-    <div class="total-card" style="background:#e6f0e8;grid-column:1/-1">
-      <div class="label" style="color:var(--green)">🏷 Sconti applicati</div>
-      <div class="value" style="color:var(--green)">−€${Math.abs(discountTotal).toFixed(2)}</div>
-    </div>` : '';
-  document.getElementById('totalsGrid').innerHTML = `
-    <div class="total-card wine">
-      <div class="label">🍷 Totale Vino</div>
-      <div class="value">€${wine.toFixed(2)}</div>
-    </div>
-    <div class="total-card food">
-      <div class="label">🥗 Totale Cibo</div>
-      <div class="value">€${food.toFixed(2)}</div>
-    </div>
-    ${discountRow}
-  `;
-
-  // Persona cards
-  document.getElementById('personaCards').innerHTML = `
-    <div class="persona-card A">
-      <div class="persona-avatar">A</div>
-      <div class="persona-info">
-        <div class="persona-name">Persona A</div>
-        <div class="persona-breakdown">Cibo €${foodShare.toFixed(2)} + Vino €${wineShare.toFixed(2)}</div>
-      </div>
-      <div class="persona-total">€${A.toFixed(2)}</div>
-    </div>
-    <div class="persona-card B">
-      <div class="persona-avatar">B</div>
-      <div class="persona-info">
-        <div class="persona-name">Persona B</div>
-        <div class="persona-breakdown">Cibo €${foodShare.toFixed(2)} + Vino €${wineShare.toFixed(2)}</div>
-      </div>
-      <div class="persona-total">€${B.toFixed(2)}</div>
-    </div>
-    <div class="persona-card C">
-      <div class="persona-avatar">C</div>
-      <div class="persona-info">
-        <div class="persona-name">Persona C</div>
-        <div class="persona-breakdown">Solo cibo €${foodShare.toFixed(2)}</div>
-      </div>
-      <div class="persona-total">€${C.toFixed(2)}</div>
-    </div>
-  `;
-
-  document.getElementById('grandTotal').innerHTML = `
-    <div>
-      <div class="label">Totale Scontrino</div>
-      <div style="font-size:0.8rem;color:var(--ink-light);margin-top:2px">${rows.length} voci · A+B+C = €${(A+B+C).toFixed(2)}</div>
-    </div>
-    <div class="value">€${total.toFixed(2)}</div>
-  `;
-
-  document.getElementById('riepilogo').classList.add('visible');
-  document.getElementById('riepilogo').scrollIntoView({behavior:'smooth', block:'start'});
-}
-
-// ── UTILS ──
-// ── DEBUG PANEL ──
-function showDebug(text) {
-  let panel = document.getElementById('debugPanel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'debugPanel';
-    panel.style.cssText = 'background:#1a1a1a;color:#0f0;font-family:monospace;font-size:0.7rem;padding:12px;border-radius:10px;margin-top:12px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;';
-    panel.innerHTML = '<div style="color:#888;margin-bottom:6px">🔍 Testo grezzo ricevuto da Claude (debug):</div><div id="debugText"></div><button onclick="document.getElementById('debugPanel').remove()" style="margin-top:8px;background:none;border:1px solid #444;color:#888;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.7rem;">Chiudi</button>';
-    const sec = document.getElementById('rowsSection');
-    sec.appendChild(panel);
-  }
-  document.getElementById('debugText').textContent = text;
-  document.getElementById('rowsSection').classList.add('visible');
-}
-
-function showStatus(msg) {
-  document.getElementById('statusText').textContent = msg;
-  document.getElementById('statusBar').classList.add('visible');
-}
-function hideStatus() {
-  document.getElementById('statusBar').classList.remove('visible');
-}
-
-let toastTimer;
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>t.classList.remove('show'), 3000);
-}
-
-function reset() {
-  rows = [];
-  document.getElementById('rowsSection').classList.remove('visible');
-  document.getElementById('riepilogo').classList.remove('visible');
-  document.getElementById('imgPreview').classList.remove('visible');
-  document.getElementById('imgPreview').src = '';
-  document.getElementById('pdfInput').value = '';
-  document.getElementById('imgInput').value = '';
-  document.getElementById('camInput').value = '';
-  window.scrollTo({top:0, behavior:'smooth'});
-  showToast('Azzerato ✓');
-}
-</script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js')
-      .catch(e => console.log('SW error:', e));
-  });
-}
+function setStatus(msg){document.getElementById('statusMsg').textContent=msg;document.getElementById('statusBar').classList.add('on');}
+function noStatus(){document.getElementById('statusBar').classList.remove('on');}
+let tT;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>el.classList.remove('on'),3000);}
+function showManual(msg){document.getElementById('manualNote').textContent=msg||'Inserisci manualmente:';document.getElementById('manualBox').classList.add('on');document.getElementById('rowsSection').classList.add('on');}
+function hideManual(){document.getElementById('manualBox').classList.remove('on');}
+function reset(){rows=[];document.getElementById('rowsList').innerHTML='';['rowsSection','resultSection'].forEach(id=>document.getElementById(id).classList.remove('on'));document.getElementById('manualBox').classList.remove('on');document.getElementById('manualText').value='';const p=document.getElementById('preview');p.classList.remove('on');p.src='';window.scrollTo({top:0,behavior:'smooth'});toast('Azzerato ✓');}
+if('serviceWorker'in navigator)navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 </script>
 </body>
 </html>
