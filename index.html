@@ -710,12 +710,8 @@ function parseReceiptText(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const parsed = [];
 
-  // Prezzo positivo o negativo alla fine della riga
-  // Gestisce: 8,45  -1,90  €3.50  -€2.00
-  const priceRe    = /(-?\d{1,4}[.,]\d{2})\s*[€$]?\s*$/;
-  const altPriceRe = /[€$]\s*(-?\d{1,4}[.,]\d{2})/;
-
-  const skipRe = /^(tot(ale)?|subtot|di cui|iva|imposta|pagam|contant|carta|bancomat|pos|resto|cambio|importo pag|receipt|scontr|benven|grazie|welcome|thank|ticket|data |ora |tavol|table|cassa|operatore|partita|p\.iva|cod\.|via |tel|www\.|http|codice|punti accu|raccolta|saldo|spesa val|arriveder|documento comm)/i;
+  // Righe da saltare sempre
+  const skipRe = /^(tot(ale)?\b|subtot|di cui|^iva\b|imposta|pagam|contant|carta\b|bancomat|pos\b|resto\b|cambio|importo pag|scontr|benven|grazie|welcome|thank|ticket|data |ora |tavol|table|cassa|operatore|partita|p\.iva|cod\.|via |tel |www\.|http|codice a|punti accu|raccolta|saldo|spesa val|arriveder|documento comm|descrizione\b)/i;
 
   for (const line of lines) {
     if (line.length < 3) continue;
@@ -725,23 +721,38 @@ function parseReceiptText(text) {
     let price = null;
     let desc = line;
 
-    let m = line.match(priceRe);
+    // ── Formato PAM/Panorama: DESCRIZIONE   IVA%   PREZZO ──
+    // Es: "MONTEPULCIANO MASC   22,00%   8,45"
+    // Es: "FRIULANO MARGHE      22,00%   -1,90"  ← sconto in grassetto
+    const pamRe = /^(.+?)\s{2,}(\d{1,2}[.,]\d{2}%)\s+(-?\d{1,4}[.,]\d{2})\s*$/;
+    let m = line.match(pamRe);
     if (m) {
-      price = parseFloat(m[1].replace(',','.'));
-      desc = line.slice(0, line.lastIndexOf(m[0])).trim();
+      desc  = m[1].trim();
+      price = parseFloat(m[3].replace(',','.'));
     } else {
-      m = line.match(altPriceRe);
+      // ── Formato standard: DESCRIZIONE   PREZZO ──
+      // Prezzo positivo o negativo alla fine (con o senza €)
+      const stdRe = /^(.+?)\s{2,}(-?\d{1,4}[.,]\d{2})\s*[€$]?\s*$/;
+      m = line.match(stdRe);
       if (m) {
-        price = parseFloat(m[1].replace(',','.'));
-        desc = line.replace(altPriceRe,'').trim();
+        desc  = m[1].trim();
+        price = parseFloat(m[2].replace(',','.'));
+      } else {
+        // ── Formato con € inline: €8,45 o -€1,90 ──
+        const euroRe = /-?[€$]\s*(\d{1,4}[.,]\d{2})/;
+        m = line.match(euroRe);
+        if (m) {
+          price = parseFloat(m[1].replace(',','.')) * (line.trim().startsWith('-') ? -1 : 1);
+          desc = line.replace(euroRe,'').trim();
+        }
       }
     }
 
     if (price === null || isNaN(price) || price === 0 || Math.abs(price) > 999) continue;
     if (!desc || desc.length < 2) continue;
 
-    // Rimuovi colonna IVA nel mezzo (es "22,00%")
-    desc = desc.replace(/\s+\d{1,2},\d{2}%\s*$/, '').trim();
+    // Pulizia descrizione
+    desc = desc.replace(/\s+\d{1,2}[.,]\d{2}%\s*$/, '').trim(); // rimuovi IVA residua
     desc = cleanDesc(desc);
     if (!desc || desc.length < 2) continue;
 
