@@ -894,80 +894,47 @@ async function callClaudeAPI(apiKey, base64, mediaType, attempt = 1) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `Sei un assistente esperto che legge scontrini italiani di supermercati e ristoranti.
-Estrai TUTTE le voci acquistate E tutti gli sconti applicati.
-Rispondi SOLO con righe nel formato:
-DESCRIZIONE|PREZZO
+          { type: 'text', text: `Sei un assistente che estrae voci da scontrini italiani.
+Rispondi SOLO con righe DESCRIZIONE|PREZZO, nient'altro.
 
-═══ REGOLE ARTICOLI ═══
-- Prezzo sempre con punto decimale (es: 3.50)
-- Se la quantità è indicata (x2, 2x, *2, 2pz ecc) metti il prezzo TOTALE della voce
-- Includi: coperto, pane, servizio, sacchetto, deposito cauzione
+PASSO 1 - LEGGI OGNI RIGA
+Ogni riga prodotto ha: nome, eventuale % IVA, e prezzo finale.
+Il prezzo puo' essere positivo (acquisto) o NEGATIVO (sconto).
+Prezzo negativo = numero con segno meno davanti, es: -1,90 o -1.90
 
-═══ REGOLE SCONTI - MOLTO IMPORTANTE ═══
-Gli sconti nei supermercati italiani appaiono in molti formati diversi. Devi riconoscerli TUTTI:
+PASSO 2 - FORMATO PAM/PANORAMA
+Queste catene usano 3 colonne: NOME   IVA%   PREZZO
+Le righe sconto sono in grassetto con prezzo negativo.
+Esempi concreti - trasforma ESATTAMENTE cosi':
+  MONTEPULCIANO MASC   22,00%   8,45   =>  Montepulciano [VINO]|8.45
+  X FRIULANO MARGHERI  22,00%   6,40   =>  Friulano Margherita [VINO]|6.40
+  FRIULANO MARGHE      22,00%  -1,90   =>  Sconto Friulano|-1.90
+  T MOLISANA PASSATA    4,00%   1,50   =>  Molisana passata|1.50
+  C S-GLUTIN PAN HAMBU 10,00%   3,75   =>  Pane s/glutine|3.75
+  X SHOPP. PIUAMENO GR 22,00%   0,15   =>  Shopper|0.15
+  T SATOS CAPPER GAMBO 10,00%   4,10   =>  Satos capperi gambo|4.10
+  T LIMONI RETE KG 1    4,00%   2,29   =>  Limoni rete kg 1|2.29
+  T POMPELMI GR 750     4,00%   1,99   =>  Pompelmi gr 750|1.99
 
-Formato 1 - Riga dedicata con importo negativo:
-  "SCONTO SOCIO   -1.50"  → Sconto socio|-1.50
-  "SCONTO COOP    -0.80"  → Sconto Coop|-0.80
-  "PROMO          -2.00"  → Promozione|-2.00
+PASSO 3 - DESCRIZIONE
+- Elimina prefisso lettera iniziale (T, C, X, B, F, M, R) seguito da spazio
+- Elimina colonna IVA (es. 22,00%)
+- Se vino/birra/alcolico: aggiungi [VINO] dopo il nome
+  Vini: Montepulciano, Friulano, Chianti, Barolo, Prosecco, Lambrusco,
+  Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Ribolla, Soave,
+  Amarone, Valpolicella, Primitivo, qualunque DOC/DOCG/IGT
+  Birre: Birra, Beer, Lager, Pils, IPA, Weiss
+  Alcolici: Grappa, Amaro, Gin, Vodka, Rum, Whisky, Limoncello
 
-Formato 2 - Riga in grassetto con prezzo negativo (tipico PAM, Esselunga, Coop):
-  "FRIULANO MARGHE   22,00%   -1,90"  → Sconto Friulano Marghe|-1.90
-  Quando una riga ha un prezzo NEGATIVO è sempre uno sconto, anche se non lo dice esplicitamente.
-  Includila come riga sconto con prezzo negativo.
+PASSO 4 - PREZZI
+- Separatore decimale: punto (8.45 non 8,45)
+- Mantieni segno negativo: -1.90
+- Qualsiasi riga con prezzo negativo e' uno sconto, includila sempre
 
-Formato 3 - Riga con asterisco o simbolo:
-  "* SCONTO        1.50"  → Sconto|-1.50
-  "**OFFERTA**     0.50"  → Offerta|-0.50
-
-Formato 4 - Sconto subito sotto l'articolo:
-  "PASTA BARILLA   1.89"
-  "  SC.SOCIO     -0.30"  → due righe: articolo + sconto separato
-
-Formato 5 - Buoni, coupon, punti:
-  "BUONO SCONTO   -5.00"  → Buono sconto|-5.00
-  "PUNTI CARTA    -1.20"  → Punti carta|-1.20
-  "CASHBACK       -0.50"  → Cashback|-0.50
-
-Formato 6 - Prefissi lettera nei supermercati (PAM, Panorama, Sigma, Conad):
-  Le righe iniziano con T, C, X, B, F, M, R seguite dal nome prodotto.
-  Rimuovi SEMPRE questi prefissi dalla descrizione finale.
-  "T LIMONI RETE KG 1" → "Limoni rete kg 1"
-  "C S-GLUTIN PAN. HAMBU" → "Pane hamburger s/glutine"
-  "X FRIULANO MARGHERI" → "Friulano Margherita [VINO]"
-  "T MOLISANA PASSATA" → "Molisana passata"
-  Alcune righe hanno anche la colonna IVA nel mezzo (es "22,00%"): ignorala.
-
-Formato 7 - Parole chiave da riconoscere come sconto (prezzo NEGATIVO):
-  SCONTO, SC., SCO., PROMO, PROMOZIONE, OFFERTA, BUONO, COUPON,
-  PUNTI, FIDELITY, SOCIO, SOCI, TESSERA, CARTA VANTAGGI,
-  RISPARMIO, RIDUZIONE, ABBUONO, RIMBORSO, RESO
-  QUALSIASI RIGA CON PREZZO NEGATIVO è uno sconto.
-
-═══ RICONOSCI VINI E ALCOLICI ═══
-Classifica come VINO o ALCOLICO le voci che contengono:
-- Nomi di vini: Montepulciano, Chianti, Barolo, Brunello, Prosecco, Lambrusco,
-  Friulano, Pinot, Merlot, Cabernet, Sangiovese, Vermentino, Moscato, Ribolla,
-  Soave, Amarone, Valpolicella, Primitivo, Negroamaro, Verdicchio ecc.
-- Parole: VINO, VIN, ROSSO, BIANCO, ROSATO, SPUMANTE, FRIZZANTE, BOLLICINE
-- Birre: BIRRA, BEER, LAGER, IPA, WEISS, PILS
-- Superalcolici: GRAPPA, AMARO, GIN, VODKA, RUM, WHISKY, LIMONCELLO
-- Suffissi DOC, DOCG, IGT indicano quasi sempre un vino
-Se è un vino/alcolico aggiungi il suffisso " [VINO]" alla descrizione.
-Esempio: "Montepulciano Masciarelli [VINO]|8.45"
-
-═══ ESCLUDI SEMPRE ═══
-- Totale, TOTALE, TOT, TOTALE COMPLESSIVO
-- Subtotale, SUBTOT
-- IVA, DI CUI IVA, imposta
-- Contanti, Carta, Bancomat, POS, Pagamento, Pagamento contante
-- Resto, RESTO, Cambio, Importo pagato
-- Punti accumulati, Raccolta punti, Saldo punti (solo quelli RISCATTATI come sconto vanno inclusi)
-- Data, ora, numero scontrino, P.IVA, codice fiscale, codice a barre
-- Righe con solo lettere/numeri senza senso (codici interni)
-
-Nessun testo aggiuntivo. Solo righe DESCRIZIONE|PREZZO.` }
+PASSO 5 - ESCLUDI QUESTE RIGHE
+TOTALE, TOTALE COMPLESSIVO, SUBTOTALE, DI CUI IVA, IVA,
+Pagamento, Carta, Bancomat, Contanti, Resto, Importo pagato,
+Raccolta punti, Saldo punti, Spesa valida, P.IVA, barcode, date, ore` }
         ]
       }]
     })
