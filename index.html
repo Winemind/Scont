@@ -644,23 +644,56 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 let rows = []; // {desc, price, isWine, uncertain}
 
 // ── WINE KEYWORDS ──
+// Parole intere o sottostringe nei nomi degli articoli
 const WINE_KW = [
-  'vino','wine','rosso','bianco','rosé','rose','prosecco','champagne','spumante',
-  'bollicin','brunello','barolo','chianti','merlot','cabernet','sangiovese',
-  'pinot','sauvignon','riesling','vermentino','grappa','amaro','aperol','spritz',
-  'birra','beer','birre','mojito','cocktail','aperitivo','digestivo','limoncello',
-  'rum','gin','vodka','whisky','whiskey','cognac','calvados','porto','sherry',
-  'bottigl','bottiglia','cl','lt','calice','bicchiere','quartino','carafa',
-  '1/4','1/2','mezzo litro','litro','lt.'
+  // Vini generici
+  'vino','wine','rosso','bianco','rosé','rose','rosato',
+  // Spumanti e bollicine
+  'prosecco','champagne','spumante','bollicin','frizzante','cava','crémant','cremant',
+  'lambrusco','lambr','moscato','asti',
+  // Vini fermi doc/docg
+  'brunello','barolo','chianti','amarone','ripasso','valpolicella','soave',
+  'verdicchio','primitivo','nero d'avola','montepulciano','aglianico',
+  'merlot','cabernet','sangiovese','pinot','sauvignon','riesling','vermentino',
+  'gewurz','gewürz','trebbiano','fiano','greco','falanghina','pecorino',
+  'barbera','dolcetto','nebbiolo','corvina','glera',
+  // Abbrevaizioni supermercato
+  'vn ','v.n.','vno','v.b.','vb ','v.r.','vr ','vin ',
+  'pros','prosc','spum','frz','friz','lamb','mosc',
+  // Birre
+  'birra','beer','birre','bira','lager','ipa','ale','weiss','weizen','pils','pilsner','stout',
+  'bir ','br ','bra ','brw ',
+  // Superalcolici
+  'grappa','amaro','limoncello','rum','gin','vodka','whisky','whiskey',
+  'cognac','calvados','porto','sherry','marsala','sambuca','ouzo',
+  'aperol','campari','spritz','negroni','mojito','cocktail',
+  'superalc','sup.alc','s.alc',
+  // Contenitori (spesso indicano vino/birra)
+  'bottiglia','bottigl','bott.','bt ','bt.','cl','calice','bicchiere',
+  'quartino','carafa','fiasco','magnum','bag in box','fusto',
+  '1/4','1/2','mezzo litro',
+  // Digestivi e aperitivi
+  'digestivo','digestiv','aperitivo','aperit','distillato','liquore','liquor',
 ];
-const WINE_PRICE_HINTS = ['vn','vno','vns','vin','wn','bir','brr','sprt'];
+
+// Abbreviazioni che da SOLE indicano vino (match inizio stringa)
+const WINE_ABBR_START = [
+  'vn ','vno ','vns ','vin ','vb ','vr ','vbco','vrso',
+  'bir ','brr ','br. ','bra ',
+  'pros','lamb','spum','frz.',
+  'grp ','grpp','dist','liq ',
+];
 
 function guessWine(desc) {
-  const d = (desc||'').toLowerCase();
+  const d = ((desc||'') + ' ').toLowerCase(); // trailing space aiuta i match con spazio finale
+  // Match diretto su parole chiave
   const direct = WINE_KW.some(k => d.includes(k));
-  const abbr = WINE_PRICE_HINTS.some(k => d.startsWith(k));
   if (direct) return {isWine: true, uncertain: false};
+  // Match abbreviazioni tipiche supermercato (inizio stringa, incerto)
+  const abbr = WINE_ABBR_START.some(k => d.startsWith(k));
   if (abbr) return {isWine: true, uncertain: true};
+  // Pattern numerici tipo "VN 75CL", "BR 33CL"
+  if (/^(vn|vb|vr|br|bir)\s*\d/.test(d)) return {isWine: true, uncertain: true};
   return {isWine: false, uncertain: false};
 }
 
@@ -817,27 +850,52 @@ async function callClaudeAPI(apiKey, base64, mediaType, attempt = 1) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `Sei un assistente che legge scontrini italiani (ristoranti e supermercati).
-Estrai TUTTE le voci con il loro prezzo, inclusi sconti e promozioni.
-Rispondi SOLO con righe nel formato esatto:
+          { type: 'text', text: `Sei un assistente esperto che legge scontrini italiani di supermercati e ristoranti.
+Estrai TUTTE le voci acquistate E tutti gli sconti applicati.
+Rispondi SOLO con righe nel formato:
 DESCRIZIONE|PREZZO
 
-Regole sui prezzi:
-- Prezzo positivo per articoli normali (es: 12.50)
-- Prezzo NEGATIVO per sconti, promozioni, punti, coupon (es: -2.00)
-- Escludi: totale finale, subtotale, IVA, resto, metodo di pagamento
-- Includi: coperto, pane, servizio, mance se sono voci esplicite
+═══ REGOLE ARTICOLI ═══
+- Prezzo sempre con punto decimale (es: 3.50)
+- Se la quantità è indicata (x2, 2x, *2, 2pz ecc) metti il prezzo TOTALE della voce
+- Includi: coperto, pane, servizio, sacchetto, deposito cauzione
 
-Regole sugli sconti:
-- Sconto, promozione, offerta, buono, coupon → prezzo negativo
-- "Sconto 10%" su articolo da 5.00 → riga separata "Sconto 10%|-0.50"
-- Fidelity card, punti, cashback → prezzo negativo
-- Se lo sconto è già incluso nel prezzo dell'articolo NON aggiungerlo separatamente
+═══ REGOLE SCONTI - MOLTO IMPORTANTE ═══
+Gli sconti nei supermercati italiani appaiono in molti formati diversi. Devi riconoscerli TUTTI:
 
-Altre regole:
-- Una voce per riga
-- Se una voce è moltiplicata (x2 ecc) metti il totale di quella voce
-- Nessun testo aggiuntivo, solo le righe DESCRIZIONE|PREZZO` }
+Formato 1 - Riga dedicata con importo negativo:
+  "SCONTO SOCIO   -1.50"  → Sconto socio|-1.50
+  "SCONTO COOP    -0.80"  → Sconto Coop|-0.80
+  "PROMO          -2.00"  → Promozione|-2.00
+
+Formato 2 - Riga con asterisco o simbolo:
+  "* SCONTO        1.50"  → Sconto|-1.50  (importo positivo ma è uno sconto → metti negativo)
+  "**OFFERTA**     0.50"  → Offerta|-0.50
+
+Formato 3 - Sconto subito sotto l'articolo:
+  "PASTA BARILLA   1.89"
+  "  SC.SOCIO     -0.30"  → due righe: articolo + sconto separato
+
+Formato 4 - Buoni, coupon, punti:
+  "BUONO SCONTO   -5.00"  → Buono sconto|-5.00
+  "PUNTI CARTA    -1.20"  → Punti carta|-1.20
+  "CASHBACK       -0.50"  → Cashback|-0.50
+
+Formato 5 - Parole chiave da riconoscere come sconto (prezzo NEGATIVO):
+  SCONTO, SC., SCO., PROMO, PROMOZIONE, OFFERTA, BUONO, COUPON,
+  PUNTI, FIDELITY, SOCIO, SOCI, TESSERA, CARTA VANTAGGI,
+  RISPARMIO, RIDUZIONE, ABBUONO, RIMBORSO, RESO
+
+═══ ESCLUDI SEMPRE ═══
+- Totale, TOTALE, TOT
+- Subtotale, SUBTOT
+- IVA, imposta
+- Contanti, Carta, Bancomat, POS, Pagamento
+- Resto, RESTO, Cambio
+- Punti accumulati (solo quelli RISCATTATI come sconto vanno inclusi)
+- Data, ora, numero scontrino, P.IVA, codice fiscale
+
+Nessun testo aggiuntivo. Solo righe DESCRIZIONE|PREZZO.` }
         ]
       }]
     })
