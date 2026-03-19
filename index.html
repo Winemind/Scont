@@ -705,46 +705,48 @@ function cleanDesc(desc) {
     .trim();
 }
 
-// ── RECEIPT TEXT PARSER (per PDF con testo) ──
+// ── RECEIPT TEXT PARSER ──
+// Gestisce: formato PAM (3 colonne: NOME  IVA%  PREZZO), formato standard, ristoranti
 function parseReceiptText(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 1);
   const parsed = [];
 
-  // Righe da saltare sempre
-  const skipRe = /^(tot(ale)?\b|subtot|di cui|^iva\b|imposta|pagam|contant|carta\b|bancomat|pos\b|resto\b|cambio|importo pag|scontr|benven|grazie|welcome|thank|ticket|data |ora |tavol|table|cassa|operatore|partita|p\.iva|cod\.|via |tel |www\.|http|codice a|punti accu|raccolta|saldo|spesa val|arriveder|documento comm|descrizione\b)/i;
+  // Righe da saltare
+  const skipRe = /^(totale|subtotale|di cui|^iva\b|imposta|pagamento|pagam|contanti|contant|carta\b|bancomat|pos\b|resto\b|cambio|importo pag|receipt|benven|grazie|welcome|arriveder|documento comm|descrizione\b|raccolta|saldo|spesa val|punti accu|codice a|p\.iva|www\.|http)/i;
 
   for (const line of lines) {
-    if (line.length < 3) continue;
     if (skipRe.test(line)) continue;
-    if (/^[-=*]{3,}/.test(line)) continue;
+    if (/^[-=*_]{3,}/.test(line)) continue;
 
     let price = null;
-    let desc = line;
+    let desc  = null;
 
-    // ── Formato PAM/Panorama: DESCRIZIONE   IVA%   PREZZO ──
-    // Es: "MONTEPULCIANO MASC   22,00%   8,45"
-    // Es: "FRIULANO MARGHE      22,00%   -1,90"  ← sconto in grassetto
-    const pamRe = /^(.+?)\s{2,}(\d{1,2}[.,]\d{2}%)\s+(-?\d{1,4}[.,]\d{2})\s*$/;
+    // ── Formato PAM: "NOME   22,00%   -1,90" ──
+    // Cattura: qualsiasi testo, spazi, percentuale IVA, spazi, prezzo (anche negativo)
+    const pamRe = /^(.+?)\s{2,}\d{1,2}[.,]\d{2}%\s+(-?\d{1,4}[.,]\d{2})\s*$/;
     let m = line.match(pamRe);
     if (m) {
       desc  = m[1].trim();
-      price = parseFloat(m[3].replace(',','.'));
-    } else {
-      // ── Formato standard: DESCRIZIONE   PREZZO ──
-      // Prezzo positivo o negativo alla fine (con o senza €)
+      price = parseFloat(m[2].replace(',', '.'));
+    }
+
+    // ── Formato standard: "NOME   8,45" o "NOME   -1,90" ──
+    if (!m) {
       const stdRe = /^(.+?)\s{2,}(-?\d{1,4}[.,]\d{2})\s*[€$]?\s*$/;
       m = line.match(stdRe);
       if (m) {
         desc  = m[1].trim();
-        price = parseFloat(m[2].replace(',','.'));
-      } else {
-        // ── Formato con € inline: €8,45 o -€1,90 ──
-        const euroRe = /-?[€$]\s*(\d{1,4}[.,]\d{2})/;
-        m = line.match(euroRe);
-        if (m) {
-          price = parseFloat(m[1].replace(',','.')) * (line.trim().startsWith('-') ? -1 : 1);
-          desc = line.replace(euroRe,'').trim();
-        }
+        price = parseFloat(m[2].replace(',', '.'));
+      }
+    }
+
+    // ── Formato con simbolo euro: "€8,45" o "-€1,90" ──
+    if (!m) {
+      const euroRe = /^(.+?)\s*-?[€$]\s*(\d{1,4}[.,]\d{2})\s*$/;
+      m = line.match(euroRe);
+      if (m) {
+        price = parseFloat(m[2].replace(',', '.')) * (line.includes('-') ? -1 : 1);
+        desc  = m[1].trim();
       }
     }
 
@@ -894,46 +896,35 @@ async function callClaudeAPI(apiKey, base64, mediaType, attempt = 1) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `Analizza questo scontrino italiano ed estrai ogni voce.
-Rispondi SOLO con righe nel formato: DESCRIZIONE|PREZZO
+          { type: 'text', text: `Sei un esperto contabile italiano. Analizza questo scontrino e rispondi SOLO con un array JSON valido, senza markdown, senza backtick, senza testo aggiuntivo.
 
-ISTRUZIONE CRITICA SUI PREZZI NEGATIVI:
-Nello scontrino ci sono righe normali (acquisti) e righe di SCONTO.
-Le righe di sconto hanno il prezzo con il SEGNO MENO davanti: -1,90 oppure - 1,90
-Spesso appaiono in grassetto o con colore diverso.
-Se una riga ha prezzo negativo -> includila con prezzo negativo (es: Sconto|-1.90)
-NON ignorare MAI le righe con prezzo negativo.
+Formato risposta (array JSON):
+[
+  {"desc": "Nome prodotto", "price": 8.45, "isWine": false},
+  {"desc": "Sconto prodotto", "price": -1.90, "isWine": false},
+  {"desc": "Vino rosso", "price": 6.40, "isWine": true}
+]
 
-FORMATO SCONTRINO PAM/PANORAMA:
-Le righe hanno 3 colonne: NOME_PRODOTTO   IVA%   PREZZO
-La colonna IVA (es. 22,00%) va IGNORATA - non e' il prezzo.
-Il prezzo e' sempre l'ULTIMO numero della riga.
+REGOLE PREZZI:
+- price è sempre un numero float con punto decimale (8.45 non "8,45")
+- Se la riga ha prezzo NEGATIVO (es: -1,90) → price deve essere negativo (-1.90). Questi sono sconti.
+- Righe in grassetto con prezzo negativo = sconti. Includili sempre.
+- Ignora: TOTALE, SUBTOTALE, IVA, Pagamento, Resto, Contanti, Raccolta punti, Saldo, P.IVA, barcode
 
-TRASFORMAZIONI OBBLIGATORIE:
-1. Rimuovi prefisso lettera iniziale (T, C, X) se seguito da spazio
-2. Il prezzo usa il punto come decimale: 8.45 non 8,45
-3. Se il prezzo e' negativo mantieni il meno: -1.90
-4. Vini e alcolici: aggiungi [VINO] dopo il nome
-   - Montepulciano, Friulano, Chianti, Barolo, Brunello, Prosecco,
-     Lambrusco, Merlot, Cabernet, Sangiovese, Pinot, Vermentino,
-     Soave, Amarone, Primitivo, Ribolla + qualsiasi DOC/DOCG/IGT
-   - Birra, Beer, Lager, IPA, Weiss, Pils
-   - Grappa, Amaro, Gin, Vodka, Rum, Whisky, Limoncello
+REGOLE DESCRIZIONE:
+- Rimuovi prefissi lettera PAM/supermercato: T, C, X seguiti da spazio (es "T LIMONI" → "Limoni")
+- Rimuovi colonna IVA se presente (es "22,00%")
+- Descrizione in italiano leggibile, non in maiuscolo
 
-ESEMPIO CONCRETO (scontrino PAM):
-Riga visiva: "MONTEPULCIANO MASC   22,00%   8,45"
-Output: Montepulciano Masciarelli [VINO]|8.45
+REGOLE isWine (true se è bevanda alcolica):
+- Vini: Montepulciano, Friulano, Chianti, Barolo, Brunello, Prosecco, Lambrusco, Merlot,
+  Cabernet, Sangiovese, Pinot, Vermentino, Ribolla, Soave, Amarone, Valpolicella,
+  Primitivo, Negroamaro, Verdicchio, Moscato, qualsiasi DOC/DOCG/IGT
+- Birre: Birra, Beer, Lager, IPA, Weiss, Pils, Stout
+- Superalcolici: Grappa, Amaro, Gin, Vodka, Rum, Whisky, Limoncello, Aperol, Campari, Spritz
+- Se hai dubbi su un prodotto, metti isWine: true
 
-Riga visiva: "FRIULANO MARGHE   22,00%   -1,90"   <- prezzo NEGATIVO = SCONTO
-Output: Sconto Friulano|-1.90
-
-Riga visiva: "X FRIULANO MARGHERI   22,00%   6,40"
-Output: Friulano Margherita [VINO]|6.40
-
-Riga visiva: "T MOLISANA PASSATA   4,00%   1,50"
-Output: Molisana passata|1.50
-
-ESCLUDI: TOTALE, SUBTOTALE, IVA, Pagamento, Carta, Contanti, Resto, Importo pagato, Raccolta punti, Saldo, P.IVA, barcode` }
+Rispondi SOLO con l'array JSON. Nessun altro testo.` }
         ]
       }]
     })
@@ -1006,101 +997,48 @@ async function processImage(file) {
   }
 }
 
-function finishParsingClaude(text) {
-  // Parse the DESCRIZIONE|PREZZO format from Claude
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const parsed = [];
-  for (const line of lines) {
-    // Skip lines that don't contain a pipe
-    if (!line.includes('|')) continue;
-    const pipeIdx = line.lastIndexOf('|');
-    let desc = line.slice(0, pipeIdx).trim();
-    const priceStr = line.slice(pipeIdx + 1).trim();
+function finishParsingClaude(rawText) {
+  showDebug(rawText);
+  try {
+    // Strip any accidental markdown fences
+    let clean = rawText.trim()
+      .replace(/^```[\w]*\n?/,'').replace(/```\s*$/,'').trim();
 
-    // Accept formats: -1.90  -1,90  1.90  1,90
-    const priceRaw = priceStr.replace(',', '.').replace(/[^0-9.\-]/g, '');
-    const price = parseFloat(priceRaw);
-    if (!desc || isNaN(price) || price === 0 || Math.abs(price) > 999) continue;
+    // Find the JSON array even if there's surrounding text
+    const jsonMatch = clean.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (!jsonMatch) throw new Error('Nessun JSON trovato nella risposta');
+    const data = JSON.parse(jsonMatch[0]);
 
-    // Detect [VINO] tag added by Claude
-    const claudeTaggedWine = /\[VINO\]/i.test(desc);
-    desc = desc.replace(/\s*\[VINO\]/i, '').trim();
-    desc = cleanDesc(desc);
+    rows = data
+      .filter(item => item.desc && typeof item.price === 'number' && item.price !== 0)
+      .map(item => ({
+        desc: capitalize(item.desc.trim()),
+        price: item.price,
+        isWine: !!item.isWine,
+        uncertain: false,
+        isDiscount: item.price < 0
+      }));
 
-    // Sconti: prezzo negativo
-    const isDiscount = price < 0;
-    let g;
-    if (isDiscount) {
-      g = {isWine: false, uncertain: false};
-    } else if (claudeTaggedWine) {
-      g = {isWine: true, uncertain: false};
-    } else {
-      g = guessWine(desc);
+    hideStatus();
+    if (rows.length === 0) {
+      showManualFallback('Nessuna voce trovata nel JSON. Vedi debug sopra.');
+      return;
     }
-    parsed.push({ desc: capitalize(desc), price, isWine: g.isWine, uncertain: g.uncertain, isDiscount });
-  }
-  rows = parsed;
-  hideStatus();
-  if (rows.length === 0) {
-    showManualFallback('Nessuna voce trovata. Inserisci manualmente:');
-    return;
-  }
-  renderRows();
-  showToast(`✓ Estratte ${rows.length} voci`);
-}
+    renderRows();
+    showToast('✓ Estratte ' + rows.length + ' voci');
 
-function showManualFallback(msg) {
-  const sec = document.getElementById('rowsSection');
-  let fb = document.getElementById('manualFallback');
-  if (!fb) {
-    fb = document.createElement('div');
-    fb.id = 'manualFallback';
-    fb.style.cssText = 'margin-bottom:14px;';
-    const apiKeyRow = getApiKey()
-      ? `<button onclick="promptApiKey();showToast('API key aggiornata ✓')" style="margin-top:6px;background:none;border:none;color:var(--terracotta);font-size:0.75rem;cursor:pointer;padding:0;">🔑 Cambia API key</button>`
-      : `<button onclick="location.reload()" style="margin-top:6px;background:none;border:none;color:var(--terracotta);font-size:0.75rem;cursor:pointer;padding:0;">🔑 Inserisci API key e riprova</button>`;
-    fb.innerHTML = `
-      <div id="fallbackMsg" style="background:#FFF8E1;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:0.78rem;color:var(--ink-mid);line-height:1.5;">
-        ⚠️ <strong>${msg || 'Inserisci le voci manualmente:'}</strong><br>
-        <span style="color:var(--ink-light)">Es: <em>Pasta al pomodoro 9.50</em></span>
-        ${apiKeyRow}
-      </div>
-      <textarea id="manualText" placeholder="Pasta al pomodoro 9.50&#10;Vino rosso 8.00&#10;Acqua 2.50&#10;Tiramisù 5.00" style="width:100%;height:130px;border:1.5px solid var(--parchment);border-radius:10px;padding:10px;font-family:'DM Sans',sans-serif;font-size:0.82rem;color:var(--ink);background:var(--cream);resize:vertical;outline:none;display:block;"></textarea>
-      <button onclick="parseManual()" style="margin-top:8px;width:100%;padding:11px;background:var(--terracotta);color:white;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:0.85rem;cursor:pointer;font-weight:500;">
-        📋 Analizza testo
-      </button>
-    `;
-    const title = sec.querySelector('.section-title');
-    title.after(fb);
-  } else {
-    const msgEl = fb.querySelector('#fallbackMsg strong');
-    if (msgEl && msg) msgEl.textContent = msg;
+  } catch(e) {
+    hideStatus();
+    console.error('JSON parse error:', e, rawText);
+    // Fallback to text parser
+    rows = parseReceiptText(rawText);
+    if (rows.length > 0) {
+      renderRows();
+      showToast('✓ ' + rows.length + ' voci (fallback parser)');
+    } else {
+      showManualFallback('Errore parsing. Controlla il pannello debug e inserisci manualmente.');
+    }
   }
-  fb.style.display = 'block';
-  sec.classList.add('visible');
-}
-
-function parseManual() {
-  const text = document.getElementById('manualText')?.value || '';
-  if (!text.trim()) { showToast('Inserisci del testo prima'); return; }
-  const fb = document.getElementById('manualFallback');
-  if (fb) fb.style.display = 'none';
-  finishParsing(text);
-}
-
-function finishParsing(text) {
-  rows = parseReceiptText(text);
-  hideStatus();
-  if (rows.length === 0) {
-    showManualFallback();
-    // Pre-fill the textarea with the raw text so user can see what was extracted
-    const ta = document.getElementById('manualText');
-    if (ta && text.trim()) ta.value = text.trim();
-    showToast('Nessuna voce rilevata — controlla il testo estratto');
-    return;
-  }
-  renderRows();
-  showToast(`✓ Estratte ${rows.length} voci`);
 }
 
 // ── DEMO DATA ──
@@ -1264,6 +1202,21 @@ function calcola() {
 }
 
 // ── UTILS ──
+// ── DEBUG PANEL ──
+function showDebug(text) {
+  let panel = document.getElementById('debugPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'debugPanel';
+    panel.style.cssText = 'background:#1a1a1a;color:#0f0;font-family:monospace;font-size:0.7rem;padding:12px;border-radius:10px;margin-top:12px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;';
+    panel.innerHTML = '<div style="color:#888;margin-bottom:6px">🔍 Testo grezzo ricevuto da Claude (debug):</div><div id="debugText"></div><button onclick="document.getElementById('debugPanel').remove()" style="margin-top:8px;background:none;border:1px solid #444;color:#888;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.7rem;">Chiudi</button>';
+    const sec = document.getElementById('rowsSection');
+    sec.appendChild(panel);
+  }
+  document.getElementById('debugText').textContent = text;
+  document.getElementById('rowsSection').classList.add('visible');
+}
+
 function showStatus(msg) {
   document.getElementById('statusText').textContent = msg;
   document.getElementById('statusBar').classList.add('visible');
