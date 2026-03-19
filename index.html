@@ -651,12 +651,14 @@ const WINE_KW = [
   // Spumanti e bollicine
   'prosecco','champagne','spumante','bollicin','frizzante','cava','crémant','cremant',
   'lambrusco','lambr','moscato','asti',
-  // Vini fermi doc/docg
+  // Vini fermi doc/docg e nomi comuni
   'brunello','barolo','chianti','amarone','ripasso','valpolicella','soave',
-  'verdicchio','primitivo','nero d'avola','montepulciano','aglianico',
+  'verdicchio','primitivo','nero d'avola','montepulciano','montepu','aglianico',
   'merlot','cabernet','sangiovese','pinot','sauvignon','riesling','vermentino',
   'gewurz','gewürz','trebbiano','fiano','greco','falanghina','pecorino',
   'barbera','dolcetto','nebbiolo','corvina','glera',
+  'friulano','ribolla','collio','doc ','docg','igt ','dop ','masciar','mascare',
+  'montep','sangese','malbec','syrah','shiraz','zinfandel','tempranillo',
   // Abbrevaizioni supermercato
   'vn ','v.n.','vno','v.b.','vb ','v.r.','vr ','vin ',
   'pros','prosc','spum','frz','friz','lamb','mosc',
@@ -868,32 +870,57 @@ Formato 1 - Riga dedicata con importo negativo:
   "SCONTO COOP    -0.80"  → Sconto Coop|-0.80
   "PROMO          -2.00"  → Promozione|-2.00
 
-Formato 2 - Riga con asterisco o simbolo:
-  "* SCONTO        1.50"  → Sconto|-1.50  (importo positivo ma è uno sconto → metti negativo)
+Formato 2 - Riga in grassetto con prezzo negativo (tipico PAM, Esselunga, Coop):
+  "FRIULANO MARGHE   22,00%   -1,90"  → Sconto Friulano Marghe|-1.90
+  Quando una riga ha un prezzo NEGATIVO è sempre uno sconto, anche se non lo dice esplicitamente.
+  Includila come riga sconto con prezzo negativo.
+
+Formato 3 - Riga con asterisco o simbolo:
+  "* SCONTO        1.50"  → Sconto|-1.50
   "**OFFERTA**     0.50"  → Offerta|-0.50
 
-Formato 3 - Sconto subito sotto l'articolo:
+Formato 4 - Sconto subito sotto l'articolo:
   "PASTA BARILLA   1.89"
   "  SC.SOCIO     -0.30"  → due righe: articolo + sconto separato
 
-Formato 4 - Buoni, coupon, punti:
+Formato 5 - Buoni, coupon, punti:
   "BUONO SCONTO   -5.00"  → Buono sconto|-5.00
   "PUNTI CARTA    -1.20"  → Punti carta|-1.20
   "CASHBACK       -0.50"  → Cashback|-0.50
 
-Formato 5 - Parole chiave da riconoscere come sconto (prezzo NEGATIVO):
+Formato 6 - Prefissi lettera nei supermercati (PAM, Panorama, Sigma):
+  Le righe iniziano con T, C, X seguite dal nome prodotto — ignorare questi prefissi nel nome.
+  "T LIMONI RETE KG 1" → il prodotto è "Limoni rete kg 1"
+  "C S-GLUTIN PAN. HAMBU" → il prodotto è "Pane hamburger senza glutine"
+  "X FRIULANO MARGHERI" → il prodotto è "Friulano Margherita"
+
+Formato 7 - Parole chiave da riconoscere come sconto (prezzo NEGATIVO):
   SCONTO, SC., SCO., PROMO, PROMOZIONE, OFFERTA, BUONO, COUPON,
   PUNTI, FIDELITY, SOCIO, SOCI, TESSERA, CARTA VANTAGGI,
   RISPARMIO, RIDUZIONE, ABBUONO, RIMBORSO, RESO
+  QUALSIASI RIGA CON PREZZO NEGATIVO è uno sconto.
+
+═══ RICONOSCI VINI E ALCOLICI ═══
+Classifica come VINO o ALCOLICO le voci che contengono:
+- Nomi di vini: Montepulciano, Chianti, Barolo, Brunello, Prosecco, Lambrusco,
+  Friulano, Pinot, Merlot, Cabernet, Sangiovese, Vermentino, Moscato, Ribolla,
+  Soave, Amarone, Valpolicella, Primitivo, Negroamaro, Verdicchio ecc.
+- Parole: VINO, VIN, ROSSO, BIANCO, ROSATO, SPUMANTE, FRIZZANTE, BOLLICINE
+- Birre: BIRRA, BEER, LAGER, IPA, WEISS, PILS
+- Superalcolici: GRAPPA, AMARO, GIN, VODKA, RUM, WHISKY, LIMONCELLO
+- Suffissi DOC, DOCG, IGT indicano quasi sempre un vino
+Se è un vino/alcolico aggiungi il suffisso " [VINO]" alla descrizione.
+Esempio: "Montepulciano Masciarelli [VINO]|8.45"
 
 ═══ ESCLUDI SEMPRE ═══
-- Totale, TOTALE, TOT
+- Totale, TOTALE, TOT, TOTALE COMPLESSIVO
 - Subtotale, SUBTOT
-- IVA, imposta
-- Contanti, Carta, Bancomat, POS, Pagamento
-- Resto, RESTO, Cambio
-- Punti accumulati (solo quelli RISCATTATI come sconto vanno inclusi)
-- Data, ora, numero scontrino, P.IVA, codice fiscale
+- IVA, DI CUI IVA, imposta
+- Contanti, Carta, Bancomat, POS, Pagamento, Pagamento contante
+- Resto, RESTO, Cambio, Importo pagato
+- Punti accumulati, Raccolta punti, Saldo punti (solo quelli RISCATTATI come sconto vanno inclusi)
+- Data, ora, numero scontrino, P.IVA, codice fiscale, codice a barre
+- Righe con solo lettere/numeri senza senso (codici interni)
 
 Nessun testo aggiuntivo. Solo righe DESCRIZIONE|PREZZO.` }
         ]
@@ -975,13 +1002,25 @@ function finishParsingClaude(text) {
   for (const line of lines) {
     const parts = line.split('|');
     if (parts.length < 2) continue;
-    const desc = parts[0].trim();
+    let desc = parts[0].trim();
     const priceRaw = parts[parts.length-1].replace(',','.').replace(/[^0-9.\-]/g,'');
     const price = parseFloat(priceRaw);
     if (!desc || isNaN(price) || price === 0 || Math.abs(price) > 999) continue;
-    // Sconti: prezzo negativo, classificati sempre come "cibo" (non vino)
+
+    // Detect [VINO] tag added by Claude
+    const claudeTaggedWine = /\[VINO\]/i.test(desc);
+    desc = desc.replace(/\s*\[VINO\]/i, '').trim();
+
+    // Sconti: prezzo negativo
     const isDiscount = price < 0;
-    const g = isDiscount ? {isWine: false, uncertain: false} : guessWine(desc);
+    let g;
+    if (isDiscount) {
+      g = {isWine: false, uncertain: false};
+    } else if (claudeTaggedWine) {
+      g = {isWine: true, uncertain: false};
+    } else {
+      g = guessWine(desc);
+    }
     parsed.push({ desc: capitalize(desc), price, isWine: g.isWine, uncertain: g.uncertain, isDiscount });
   }
   rows = parsed;
