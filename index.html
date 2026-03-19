@@ -687,32 +687,40 @@ const WINE_ABBR_START = [
 ];
 
 function guessWine(desc) {
-  const d = ((desc||'') + ' ').toLowerCase(); // trailing space aiuta i match con spazio finale
-  // Match diretto su parole chiave
+  const d = ((desc||'') + ' ').toLowerCase();
   const direct = WINE_KW.some(k => d.includes(k));
   if (direct) return {isWine: true, uncertain: false};
-  // Match abbreviazioni tipiche supermercato (inizio stringa, incerto)
   const abbr = WINE_ABBR_START.some(k => d.startsWith(k));
   if (abbr) return {isWine: true, uncertain: true};
-  // Pattern numerici tipo "VN 75CL", "BR 33CL"
   if (/^(vn|vb|vr|br|bir)\s*\d/.test(d)) return {isWine: true, uncertain: true};
   return {isWine: false, uncertain: false};
 }
 
-// ── RECEIPT TEXT PARSER ──
+// Rimuove prefissi lettera tipici dei supermercati (PAM, Sigma, ecc.)
+// Es: "T LIMONI RETE" → "Limoni rete", "X FRIULANO" → "Friulano"
+function cleanDesc(desc) {
+  return desc
+    .replace(/^[TCXBFMR]\s+/, '')   // prefisso lettera singola
+    .replace(/^\d+\s*[Xx]\s+/, '') // quantità tipo "2X " o "2 X "
+    .trim();
+}
+
+// ── RECEIPT TEXT PARSER (per PDF con testo) ──
 function parseReceiptText(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const parsed = [];
 
-  // Patterns for price
-  const priceRe = /(\d{1,3}[.,]\d{2})\s*[€$]?$/;
-  const altRe   = /[€$]\s*(\d{1,3}[.,]\d{2})/;
-  const skipRe  = /^(tot|total|subtot|iva|tax|ivato|scont|discount|coperto|servizio|serviz|servic|resto|cash|carta|contant|pagato|pagam|change|receipt|scontr|benven|grazie|welcome|thank|ticket|data|ora|tavol|table|cassa|operatore|operato|partita|p\.iva|cod\.|via |tel|www\.|http)/i;
+  // Prezzo positivo o negativo alla fine della riga
+  // Gestisce: 8,45  -1,90  €3.50  -€2.00
+  const priceRe    = /(-?\d{1,4}[.,]\d{2})\s*[€$]?\s*$/;
+  const altPriceRe = /[€$]\s*(-?\d{1,4}[.,]\d{2})/;
+
+  const skipRe = /^(tot(ale)?|subtot|di cui|iva|imposta|pagam|contant|carta|bancomat|pos|resto|cambio|importo pag|receipt|scontr|benven|grazie|welcome|thank|ticket|data |ora |tavol|table|cassa|operatore|partita|p\.iva|cod\.|via |tel|www\.|http|codice|punti accu|raccolta|saldo|spesa val|arriveder|documento comm)/i;
 
   for (const line of lines) {
     if (line.length < 3) continue;
     if (skipRe.test(line)) continue;
-    if (/^[*=-]{3,}/.test(line)) continue;
+    if (/^[-=*]{3,}/.test(line)) continue;
 
     let price = null;
     let desc = line;
@@ -722,18 +730,24 @@ function parseReceiptText(text) {
       price = parseFloat(m[1].replace(',','.'));
       desc = line.slice(0, line.lastIndexOf(m[0])).trim();
     } else {
-      m = line.match(altRe);
+      m = line.match(altPriceRe);
       if (m) {
         price = parseFloat(m[1].replace(',','.'));
-        desc = line.replace(altRe,'').trim();
+        desc = line.replace(altPriceRe,'').trim();
       }
     }
 
-    if (!price || price <= 0 || price > 500) continue;
+    if (price === null || isNaN(price) || price === 0 || Math.abs(price) > 999) continue;
     if (!desc || desc.length < 2) continue;
 
-    const g = guessWine(desc);
-    parsed.push({ desc: capitalize(desc), price, isWine: g.isWine, uncertain: g.uncertain });
+    // Rimuovi colonna IVA nel mezzo (es "22,00%")
+    desc = desc.replace(/\s+\d{1,2},\d{2}%\s*$/, '').trim();
+    desc = cleanDesc(desc);
+    if (!desc || desc.length < 2) continue;
+
+    const isDiscount = price < 0;
+    const g = isDiscount ? {isWine: false, uncertain: false} : guessWine(desc);
+    parsed.push({ desc: capitalize(desc), price, isWine: g.isWine, uncertain: g.uncertain, isDiscount });
   }
   return parsed;
 }
@@ -888,11 +902,14 @@ Formato 5 - Buoni, coupon, punti:
   "PUNTI CARTA    -1.20"  → Punti carta|-1.20
   "CASHBACK       -0.50"  → Cashback|-0.50
 
-Formato 6 - Prefissi lettera nei supermercati (PAM, Panorama, Sigma):
-  Le righe iniziano con T, C, X seguite dal nome prodotto — ignorare questi prefissi nel nome.
-  "T LIMONI RETE KG 1" → il prodotto è "Limoni rete kg 1"
-  "C S-GLUTIN PAN. HAMBU" → il prodotto è "Pane hamburger senza glutine"
-  "X FRIULANO MARGHERI" → il prodotto è "Friulano Margherita"
+Formato 6 - Prefissi lettera nei supermercati (PAM, Panorama, Sigma, Conad):
+  Le righe iniziano con T, C, X, B, F, M, R seguite dal nome prodotto.
+  Rimuovi SEMPRE questi prefissi dalla descrizione finale.
+  "T LIMONI RETE KG 1" → "Limoni rete kg 1"
+  "C S-GLUTIN PAN. HAMBU" → "Pane hamburger s/glutine"
+  "X FRIULANO MARGHERI" → "Friulano Margherita [VINO]"
+  "T MOLISANA PASSATA" → "Molisana passata"
+  Alcune righe hanno anche la colonna IVA nel mezzo (es "22,00%"): ignorala.
 
 Formato 7 - Parole chiave da riconoscere come sconto (prezzo NEGATIVO):
   SCONTO, SC., SCO., PROMO, PROMOZIONE, OFFERTA, BUONO, COUPON,
@@ -1010,6 +1027,7 @@ function finishParsingClaude(text) {
     // Detect [VINO] tag added by Claude
     const claudeTaggedWine = /\[VINO\]/i.test(desc);
     desc = desc.replace(/\s*\[VINO\]/i, '').trim();
+    desc = cleanDesc(desc);
 
     // Sconti: prezzo negativo
     const isDiscount = price < 0;
