@@ -894,47 +894,46 @@ async function callClaudeAPI(apiKey, base64, mediaType, attempt = 1) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `Sei un assistente che estrae voci da scontrini italiani.
-Rispondi SOLO con righe DESCRIZIONE|PREZZO, nient'altro.
+          { type: 'text', text: `Analizza questo scontrino italiano ed estrai ogni voce.
+Rispondi SOLO con righe nel formato: DESCRIZIONE|PREZZO
 
-PASSO 1 - LEGGI OGNI RIGA
-Ogni riga prodotto ha: nome, eventuale % IVA, e prezzo finale.
-Il prezzo puo' essere positivo (acquisto) o NEGATIVO (sconto).
-Prezzo negativo = numero con segno meno davanti, es: -1,90 o -1.90
+ISTRUZIONE CRITICA SUI PREZZI NEGATIVI:
+Nello scontrino ci sono righe normali (acquisti) e righe di SCONTO.
+Le righe di sconto hanno il prezzo con il SEGNO MENO davanti: -1,90 oppure - 1,90
+Spesso appaiono in grassetto o con colore diverso.
+Se una riga ha prezzo negativo -> includila con prezzo negativo (es: Sconto|-1.90)
+NON ignorare MAI le righe con prezzo negativo.
 
-PASSO 2 - FORMATO PAM/PANORAMA
-Queste catene usano 3 colonne: NOME   IVA%   PREZZO
-Le righe sconto sono in grassetto con prezzo negativo.
-Esempi concreti - trasforma ESATTAMENTE cosi':
-  MONTEPULCIANO MASC   22,00%   8,45   =>  Montepulciano [VINO]|8.45
-  X FRIULANO MARGHERI  22,00%   6,40   =>  Friulano Margherita [VINO]|6.40
-  FRIULANO MARGHE      22,00%  -1,90   =>  Sconto Friulano|-1.90
-  T MOLISANA PASSATA    4,00%   1,50   =>  Molisana passata|1.50
-  C S-GLUTIN PAN HAMBU 10,00%   3,75   =>  Pane s/glutine|3.75
-  X SHOPP. PIUAMENO GR 22,00%   0,15   =>  Shopper|0.15
-  T SATOS CAPPER GAMBO 10,00%   4,10   =>  Satos capperi gambo|4.10
-  T LIMONI RETE KG 1    4,00%   2,29   =>  Limoni rete kg 1|2.29
-  T POMPELMI GR 750     4,00%   1,99   =>  Pompelmi gr 750|1.99
+FORMATO SCONTRINO PAM/PANORAMA:
+Le righe hanno 3 colonne: NOME_PRODOTTO   IVA%   PREZZO
+La colonna IVA (es. 22,00%) va IGNORATA - non e' il prezzo.
+Il prezzo e' sempre l'ULTIMO numero della riga.
 
-PASSO 3 - DESCRIZIONE
-- Elimina prefisso lettera iniziale (T, C, X, B, F, M, R) seguito da spazio
-- Elimina colonna IVA (es. 22,00%)
-- Se vino/birra/alcolico: aggiungi [VINO] dopo il nome
-  Vini: Montepulciano, Friulano, Chianti, Barolo, Prosecco, Lambrusco,
-  Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Ribolla, Soave,
-  Amarone, Valpolicella, Primitivo, qualunque DOC/DOCG/IGT
-  Birre: Birra, Beer, Lager, Pils, IPA, Weiss
-  Alcolici: Grappa, Amaro, Gin, Vodka, Rum, Whisky, Limoncello
+TRASFORMAZIONI OBBLIGATORIE:
+1. Rimuovi prefisso lettera iniziale (T, C, X) se seguito da spazio
+2. Il prezzo usa il punto come decimale: 8.45 non 8,45
+3. Se il prezzo e' negativo mantieni il meno: -1.90
+4. Vini e alcolici: aggiungi [VINO] dopo il nome
+   - Montepulciano, Friulano, Chianti, Barolo, Brunello, Prosecco,
+     Lambrusco, Merlot, Cabernet, Sangiovese, Pinot, Vermentino,
+     Soave, Amarone, Primitivo, Ribolla + qualsiasi DOC/DOCG/IGT
+   - Birra, Beer, Lager, IPA, Weiss, Pils
+   - Grappa, Amaro, Gin, Vodka, Rum, Whisky, Limoncello
 
-PASSO 4 - PREZZI
-- Separatore decimale: punto (8.45 non 8,45)
-- Mantieni segno negativo: -1.90
-- Qualsiasi riga con prezzo negativo e' uno sconto, includila sempre
+ESEMPIO CONCRETO (scontrino PAM):
+Riga visiva: "MONTEPULCIANO MASC   22,00%   8,45"
+Output: Montepulciano Masciarelli [VINO]|8.45
 
-PASSO 5 - ESCLUDI QUESTE RIGHE
-TOTALE, TOTALE COMPLESSIVO, SUBTOTALE, DI CUI IVA, IVA,
-Pagamento, Carta, Bancomat, Contanti, Resto, Importo pagato,
-Raccolta punti, Saldo punti, Spesa valida, P.IVA, barcode, date, ore` }
+Riga visiva: "FRIULANO MARGHE   22,00%   -1,90"   <- prezzo NEGATIVO = SCONTO
+Output: Sconto Friulano|-1.90
+
+Riga visiva: "X FRIULANO MARGHERI   22,00%   6,40"
+Output: Friulano Margherita [VINO]|6.40
+
+Riga visiva: "T MOLISANA PASSATA   4,00%   1,50"
+Output: Molisana passata|1.50
+
+ESCLUDI: TOTALE, SUBTOTALE, IVA, Pagamento, Carta, Contanti, Resto, Importo pagato, Raccolta punti, Saldo, P.IVA, barcode` }
         ]
       }]
     })
@@ -1012,10 +1011,14 @@ function finishParsingClaude(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const parsed = [];
   for (const line of lines) {
-    const parts = line.split('|');
-    if (parts.length < 2) continue;
-    let desc = parts[0].trim();
-    const priceRaw = parts[parts.length-1].replace(',','.').replace(/[^0-9.\-]/g,'');
+    // Skip lines that don't contain a pipe
+    if (!line.includes('|')) continue;
+    const pipeIdx = line.lastIndexOf('|');
+    let desc = line.slice(0, pipeIdx).trim();
+    const priceStr = line.slice(pipeIdx + 1).trim();
+
+    // Accept formats: -1.90  -1,90  1.90  1,90
+    const priceRaw = priceStr.replace(',', '.').replace(/[^0-9.\-]/g, '');
     const price = parseFloat(priceRaw);
     if (!desc || isNaN(price) || price === 0 || Math.abs(price) > 999) continue;
 
