@@ -818,15 +818,24 @@ async function callClaudeAPI(apiKey, base64, mediaType, attempt = 1) {
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
           { type: 'text', text: `Sei un assistente che legge scontrini italiani (ristoranti e supermercati).
-Estrai TUTTE le voci con il loro prezzo.
+Estrai TUTTE le voci con il loro prezzo, inclusi sconti e promozioni.
 Rispondi SOLO con righe nel formato esatto:
 DESCRIZIONE|PREZZO
 
-Regole:
+Regole sui prezzi:
+- Prezzo positivo per articoli normali (es: 12.50)
+- Prezzo NEGATIVO per sconti, promozioni, punti, coupon (es: -2.00)
+- Escludi: totale finale, subtotale, IVA, resto, metodo di pagamento
+- Includi: coperto, pane, servizio, mance se sono voci esplicite
+
+Regole sugli sconti:
+- Sconto, promozione, offerta, buono, coupon → prezzo negativo
+- "Sconto 10%" su articolo da 5.00 → riga separata "Sconto 10%|-0.50"
+- Fidelity card, punti, cashback → prezzo negativo
+- Se lo sconto è già incluso nel prezzo dell'articolo NON aggiungerlo separatamente
+
+Altre regole:
 - Una voce per riga
-- Prezzo con punto decimale (es: 12.50)
-- Escludi totali, subtotali, IVA, resto, pagamenti
-- Includi coperto, pane, servizio se presenti come voci separate
 - Se una voce è moltiplicata (x2 ecc) metti il totale di quella voce
 - Nessun testo aggiuntivo, solo le righe DESCRIZIONE|PREZZO` }
         ]
@@ -909,10 +918,13 @@ function finishParsingClaude(text) {
     const parts = line.split('|');
     if (parts.length < 2) continue;
     const desc = parts[0].trim();
-    const price = parseFloat(parts[parts.length-1].replace(',','.'));
-    if (!desc || isNaN(price) || price <= 0 || price > 999) continue;
-    const g = guessWine(desc);
-    parsed.push({ desc: capitalize(desc), price, isWine: g.isWine, uncertain: g.uncertain });
+    const priceRaw = parts[parts.length-1].replace(',','.').replace(/[^0-9.\-]/g,'');
+    const price = parseFloat(priceRaw);
+    if (!desc || isNaN(price) || price === 0 || Math.abs(price) > 999) continue;
+    // Sconti: prezzo negativo, classificati sempre come "cibo" (non vino)
+    const isDiscount = price < 0;
+    const g = isDiscount ? {isWine: false, uncertain: false} : guessWine(desc);
+    parsed.push({ desc: capitalize(desc), price, isWine: g.isWine, uncertain: g.uncertain, isDiscount });
   }
   rows = parsed;
   hideStatus();
@@ -993,6 +1005,7 @@ function loadDemo() {
     {desc: 'Panna cotta ai frutti di bosco', price: 5.50, isWine: false, uncertain: false},
     {desc: 'Amaro digestivo x3', price: 9.00, isWine: true, uncertain: true},
     {desc: 'Coperto x3', price: 9.00, isWine: false, uncertain: false},
+    {desc: 'Sconto fidelity card', price: -5.00, isWine: false, uncertain: false, isDiscount: true},
   ];
   renderRows();
   showToast('🧾 Scontrino di esempio caricato');
@@ -1006,12 +1019,16 @@ function renderRows() {
     const div = document.createElement('div');
     div.className = 'row-item' + (r.uncertain ? ' uncertain-row' : '');
     div.setAttribute('data-i', i);
+    const priceColor = r.price < 0 ? 'color:var(--green);font-weight:600' : '';
     div.innerHTML = `
       <input class="row-desc" value="${escHtml(r.desc)}" oninput="updateRow(${i},'desc',this.value)" placeholder="Descrizione">
-      <input class="row-price" type="number" step="0.01" min="0" value="${r.price.toFixed(2)}" oninput="updateRow(${i},'price',this.value)">
-      <button class="tag-btn ${r.isWine?'tag-wine':'tag-food'} ${r.isWine?'active':''}" onclick="toggleWine(${i})" title="${r.isWine?'Segna come cibo':'Segna come vino'}">
+      <input class="row-price" type="number" step="0.01" value="${r.price.toFixed(2)}" oninput="updateRow(${i},'price',this.value)" style="${priceColor}">
+      ${r.price < 0
+        ? `<span class="tag-btn" style="background:#e6f0e8;color:var(--green);cursor:default">🏷 Sconto</span>`
+        : `<button class="tag-btn ${r.isWine?'tag-wine':'tag-food'} ${r.isWine?'active':''}" onclick="toggleWine(${i})" title="${r.isWine?'Segna come cibo':'Segna come vino'}">
         ${r.isWine?'🍷 Vino':'🥗 Cibo'}
-      </button>
+      </button>`
+      }
       ${r.uncertain ? '<span class="uncertain-badge">?</span>' : ''}
       <button class="delete-row" onclick="deleteRow(${i})" title="Rimuovi">✕</button>
     `;
@@ -1053,9 +1070,20 @@ function addEmptyRow() {
 
 // ── CALCOLA ──
 function calcola() {
-  const wine   = rows.filter(r => r.isWine).reduce((s,r)=>s+r.price, 0);
-  const food   = rows.filter(r => !r.isWine).reduce((s,r)=>s+r.price, 0);
-  const total  = wine + food;
+  // Separate discounts from normal items
+  const discountTotal = rows.filter(r => r.price < 0).reduce((s,r)=>s+r.price, 0);
+  const wineGross  = rows.filter(r => r.isWine  && r.price > 0).reduce((s,r)=>s+r.price, 0);
+  const foodGross  = rows.filter(r => !r.isWine && r.price > 0).reduce((s,r)=>s+r.price, 0);
+  const grossTotal = wineGross + foodGross;
+
+  // Distribute discount proportionally between wine and food
+  const wineRatio   = grossTotal > 0 ? wineGross / grossTotal : 0;
+  const wineDiscount = discountTotal * wineRatio;
+  const foodDiscount = discountTotal * (1 - wineRatio);
+
+  const wine  = wineGross + wineDiscount;
+  const food  = foodGross + foodDiscount;
+  const total = wine + food;
 
   const foodShare = food / 3;
   const wineShare = wine / 2;
@@ -1065,6 +1093,11 @@ function calcola() {
   const C = foodShare;
 
   // Totals grid
+  const discountRow = discountTotal < 0 ? `
+    <div class="total-card" style="background:#e6f0e8;grid-column:1/-1">
+      <div class="label" style="color:var(--green)">🏷 Sconti applicati</div>
+      <div class="value" style="color:var(--green)">−€${Math.abs(discountTotal).toFixed(2)}</div>
+    </div>` : '';
   document.getElementById('totalsGrid').innerHTML = `
     <div class="total-card wine">
       <div class="label">🍷 Totale Vino</div>
@@ -1074,6 +1107,7 @@ function calcola() {
       <div class="label">🥗 Totale Cibo</div>
       <div class="value">€${food.toFixed(2)}</div>
     </div>
+    ${discountRow}
   `;
 
   // Persona cards
