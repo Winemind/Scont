@@ -896,35 +896,48 @@ async function callClaudeAPI(apiKey, base64, mediaType, attempt = 1) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: `Sei un esperto contabile italiano. Analizza questo scontrino e rispondi SOLO con un array JSON valido, senza markdown, senza backtick, senza testo aggiuntivo.
+          { type: 'text', text: `Sei un esperto di scontrini italiani. Guarda attentamente questa immagine ed estrai ogni voce con il suo prezzo.
 
-Formato risposta (array JSON):
+Restituisci SOLO un array JSON valido, senza markdown, senza spiegazioni, senza testo aggiuntivo.
+
+Schema per ogni voce:
+{"desc": "stringa", "price": numero, "isWine": booleano}
+
+COME LEGGERE I PREZZI:
+- Leggi sempre l'ULTIMO numero di ogni riga prodotto come prezzo
+- Se c'è una colonna IVA nel mezzo (es: 22%, 10%, 4%) ignorala - non è il prezzo
+- Prezzi negativi (es: -1,90 o scritti in rosso/grassetto con segno meno) sono SCONTI - includili con price negativo
+- Converti virgola in punto: 1,90 → 1.90
+
+COME PULIRE LA DESCRIZIONE:
+- Se la riga inizia con una lettera sola seguita da spazio (T, C, X, B, F, M) rimuovila
+- Scrivi in italiano leggibile, non tutto maiuscolo
+- Rimuovi la colonna IVA dalla descrizione
+
+COME CLASSIFICARE isWine:
+Metti isWine: true per QUALSIASI bevanda alcolica:
+- Vini fermi: Montepulciano, Friulano, Chianti, Barolo, Brunello, Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Ribolla, Soave, Amarone, Valpolicella, Primitivo, Lambrusco, Moscato, Verdicchio, Nero d'Avola, Barbera, Dolcetto, Negroamaro, Sagrantino, Aglianico
+- Spumanti: Prosecco, Champagne, Spumante, Franciacorta, Cava
+- Birre: Birra, Beer, Lager, IPA, Weiss, Pils, Ale, Stout
+- Superalcolici: Grappa, Amaro, Gin, Vodka, Rum, Whisky, Brandy, Cognac, Limoncello, Aperol, Campari
+- Qualsiasi prodotto con DOC, DOCG, IGT nella descrizione
+- Se il nome del prodotto è un vitigno o una denominazione vinicola italiana
+
+NON INCLUDERE:
+- Totale, Totale Complessivo, Subtotale
+- IVA, Di cui IVA
+- Pagamento, Contanti, Carta, Bancomat, Resto, Importo pagato
+- Raccolta punti, Saldo punti, Spesa valida per punti
+- P.IVA, Codice fiscale, Data, Ora, Numero scontrino, Barcode
+- Intestazione negozio, indirizzi, numeri di telefono
+
+Rispondi SOLO con l'array JSON. Esempio:
 [
-  {"desc": "Nome prodotto", "price": 8.45, "isWine": false},
-  {"desc": "Sconto prodotto", "price": -1.90, "isWine": false},
-  {"desc": "Vino rosso", "price": 6.40, "isWine": true}
-]
-
-REGOLE PREZZI:
-- price è sempre un numero float con punto decimale (8.45 non "8,45")
-- Se la riga ha prezzo NEGATIVO (es: -1,90) → price deve essere negativo (-1.90). Questi sono sconti.
-- Righe in grassetto con prezzo negativo = sconti. Includili sempre.
-- Ignora: TOTALE, SUBTOTALE, IVA, Pagamento, Resto, Contanti, Raccolta punti, Saldo, P.IVA, barcode
-
-REGOLE DESCRIZIONE:
-- Rimuovi prefissi lettera PAM/supermercato: T, C, X seguiti da spazio (es "T LIMONI" → "Limoni")
-- Rimuovi colonna IVA se presente (es "22,00%")
-- Descrizione in italiano leggibile, non in maiuscolo
-
-REGOLE isWine (true se è bevanda alcolica):
-- Vini: Montepulciano, Friulano, Chianti, Barolo, Brunello, Prosecco, Lambrusco, Merlot,
-  Cabernet, Sangiovese, Pinot, Vermentino, Ribolla, Soave, Amarone, Valpolicella,
-  Primitivo, Negroamaro, Verdicchio, Moscato, qualsiasi DOC/DOCG/IGT
-- Birre: Birra, Beer, Lager, IPA, Weiss, Pils, Stout
-- Superalcolici: Grappa, Amaro, Gin, Vodka, Rum, Whisky, Limoncello, Aperol, Campari, Spritz
-- Se hai dubbi su un prodotto, metti isWine: true
-
-Rispondi SOLO con l'array JSON. Nessun altro testo.` }
+  {"desc": "Montepulciano Masciarelli", "price": 8.45, "isWine": true},
+  {"desc": "Sconto Friulano", "price": -1.90, "isWine": false},
+  {"desc": "Molisana passata", "price": 1.50, "isWine": false},
+  {"desc": "Limoni rete kg 1", "price": 2.29, "isWine": false}
+]` }
         ]
       }]
     })
@@ -1000,19 +1013,28 @@ async function processImage(file) {
 function finishParsingClaude(rawText) {
   showDebug(rawText);
   try {
-    // Strip any accidental markdown fences
+    // Rimuovi markdown fences se presenti
     let clean = rawText.trim()
-      .replace(/^```[\w]*\n?/,'').replace(/```\s*$/,'').trim();
+      .replace(/^```[\w]*\n?/, '').replace(/```\s*$/, '').trim();
 
-    // Find the JSON array even if there's surrounding text
-    const jsonMatch = clean.match(/\[\s*\{[\s\S]*\}\s*\]/);
-    if (!jsonMatch) throw new Error('Nessun JSON trovato nella risposta');
+    // Estrai array JSON anche se c'è testo attorno
+    const jsonMatch = clean.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('Nessun array JSON trovato');
+
     const data = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(data) || data.length === 0) throw new Error('Array vuoto');
 
+    // Claude ha già fatto tutto: desc pulita, price corretto, isWine classificato
+    // Ci fidiamo completamente della sua risposta
     rows = data
-      .filter(item => item.desc && typeof item.price === 'number' && item.price !== 0)
+      .filter(item => {
+        if (!item.desc || typeof item.price !== 'number') return false;
+        if (item.price === 0) return false;
+        if (Math.abs(item.price) > 9999) return false;
+        return true;
+      })
       .map(item => ({
-        desc: capitalize(item.desc.trim()),
+        desc: item.desc.trim(),
         price: item.price,
         isWine: !!item.isWine,
         uncertain: false,
@@ -1021,7 +1043,7 @@ function finishParsingClaude(rawText) {
 
     hideStatus();
     if (rows.length === 0) {
-      showManualFallback('Nessuna voce trovata nel JSON. Vedi debug sopra.');
+      showManualFallback('Nessuna voce valida trovata. Controlla il pannello debug.');
       return;
     }
     renderRows();
@@ -1029,15 +1051,8 @@ function finishParsingClaude(rawText) {
 
   } catch(e) {
     hideStatus();
-    console.error('JSON parse error:', e, rawText);
-    // Fallback to text parser
-    rows = parseReceiptText(rawText);
-    if (rows.length > 0) {
-      renderRows();
-      showToast('✓ ' + rows.length + ' voci (fallback parser)');
-    } else {
-      showManualFallback('Errore parsing. Controlla il pannello debug e inserisci manualmente.');
-    }
+    console.error('Errore parsing JSON:', e.message);
+    showManualFallback('❌ Claude non ha restituito JSON valido. Inserisci manualmente o riprova.');
   }
 }
 
