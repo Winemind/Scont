@@ -103,7 +103,7 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--ink);min-
 <body>
 <div class="header">
   <h1>🍽 Dividi <em>Scontrino</em></h1>
-  <p>Divisione automatica del conto &nbsp;·&nbsp; <span style="color:var(--terra2);font-weight:500">v2.0</span></p>
+  <p>Divisione automatica del conto &nbsp;·&nbsp; <span style="color:var(--terra2);font-weight:500">v2.1</span></p>
 </div>
 <div class="wrap">
   <div class="card">
@@ -556,9 +556,12 @@ function hideManual(){document.getElementById('manualBox').classList.remove('on'
 function reset(){rows=[];document.getElementById('rowsList').innerHTML='';['rowsSection','resultSection'].forEach(id=>document.getElementById(id).classList.remove('on'));document.getElementById('manualBox').classList.remove('on');document.getElementById('manualText').value='';const p=document.getElementById('preview');p.classList.remove('on');p.src='';window.scrollTo({top:0,behavior:'smooth'});toast('Azzerato ✓');}
 // File input listeners - più affidabili di onchange su Android
 document.addEventListener('DOMContentLoaded', function(){
-  document.getElementById('inPdf').addEventListener('change', function(){ onFile(this,'pdf'); });
-  document.getElementById('inImg').addEventListener('change', function(){ onFile(this,'img'); });
-  document.getElementById('inCam').addEventListener('change', function(){ onFile(this,'img'); });
+  const inPdf = document.getElementById('inPdf');
+  const inImg = document.getElementById('inImg');
+  const inCam = document.getElementById('inCam');
+  inPdf.addEventListener('change', function(){ onFile(inPdf,'pdf'); });
+  inImg.addEventListener('change', function(){ onFile(inImg,'img'); });
+  inCam.addEventListener('change', function(){ onFile(inCam,'img'); });
 });
 
 if('serviceWorker' in navigator){
