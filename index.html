@@ -108,10 +108,21 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--ink);min-
 <div class="wrap">
   <div class="card">
     <div class="card-title"><span class="badge">1</span> Carica lo scontrino</div>
+    <!-- Input file nascosti -->
+    <input type="file" id="inPdf" accept="application/pdf" style="display:none" onchange="onFile(this,'pdf')">
+    <input type="file" id="inImg" accept="image/*" style="display:none" onchange="onFile(this,'img')">
+    <input type="file" id="inCam" accept="image/*" capture="environment" style="display:none" onchange="onFile(this,'img')">
+
     <div class="upload-row">
-      <label class="upload-btn"><span class="ico">📄</span><span class="lbl">PDF</span><input type="file" accept="application/pdf" onchange="onFile(this,'pdf')"></label>
-      <label class="upload-btn"><span class="ico">🖼</span><span class="lbl">Immagine</span><input type="file" accept="image/*" onchange="onFile(this,'img')"></label>
-      <label class="upload-btn"><span class="ico">📷</span><span class="lbl">Foto</span><input type="file" accept="image/*" capture="environment" onchange="onFile(this,'img')"></label>
+      <button class="upload-btn" onclick="document.getElementById('inPdf').click()">
+        <span class="ico">📄</span><span class="lbl">PDF</span>
+      </button>
+      <button class="upload-btn" onclick="document.getElementById('inImg').click()">
+        <span class="ico">🖼</span><span class="lbl">Immagine</span>
+      </button>
+      <button class="upload-btn" onclick="document.getElementById('inCam').click()">
+        <span class="ico">📷</span><span class="lbl">Foto</span>
+      </button>
     </div>
     <img id="preview" class="img-preview">
     <div class="sep">oppure</div>
