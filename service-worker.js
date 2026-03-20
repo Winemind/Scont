@@ -1,10 +1,8 @@
-const CACHE = 'scontrino-v1';
+const CACHE = 'scontrino-v3';
 const ASSETS = [
+  './',
   './index.html',
-  './manifest.json',
-  'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+  './manifest.json'
 ];
 
 self.addEventListener('install', e => {
@@ -23,16 +21,13 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
+// Network first - sempre scarica la versione più aggiornata
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      return cached || fetch(e.request).then(res => {
-        if (res && res.status === 200 && res.type !== 'opaque') {
-          const clone = res.clone();
-          caches.open(CACHE).then(cache => cache.put(e.request, clone));
-        }
-        return res;
-      });
-    }).catch(() => caches.match('./index.html'))
+    fetch(e.request).then(res => {
+      const clone = res.clone();
+      caches.open(CACHE).then(cache => cache.put(e.request, clone));
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });

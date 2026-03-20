@@ -600,7 +600,15 @@ function showPaste(){
 function showManual(msg){document.getElementById('manualNote').textContent=msg||'Inserisci manualmente:';document.getElementById('manualBox').classList.add('on');document.getElementById('rowsSection').classList.add('on');}
 function hideManual(){document.getElementById('manualBox').classList.remove('on');}
 function reset(){rows=[];document.getElementById('rowsList').innerHTML='';['rowsSection','resultSection'].forEach(id=>document.getElementById(id).classList.remove('on'));document.getElementById('manualBox').classList.remove('on');document.getElementById('manualText').value='';const p=document.getElementById('preview');p.classList.remove('on');p.src='';window.scrollTo({top:0,behavior:'smooth'});toast('Azzerato ✓');}
-if('serviceWorker'in navigator)navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('service-worker.js').then(reg => {
+    reg.update(); // forza controllo aggiornamenti
+  }).catch(()=>{});
+  // Se c'è un SW che controlla, forza reload alla prima attivazione
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
+  });
+}
 </script>
 </body>
 </html>
