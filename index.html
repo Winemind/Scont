@@ -4,10 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Dividi Scontrino AI</title>
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1d1816" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Scontrino" />
+  <link rel="apple-touch-icon" href="icon-192.png">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
@@ -667,7 +669,11 @@
         $('preview').classList.add('on');
 
         setStatus('OCR locale in corso...');
-        const { data } = await Tesseract.recognize(safe.blob, 'ita+eng', {
+        // Fix Android: converti blob in base64 prima di passare a Tesseract
+        const base64 = await new Promise((res, rej) => {
+          const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(safe.blob);
+        });
+        const { data } = await Tesseract.recognize(base64, 'ita+eng', {
           logger: (m) => {
             if (m.status === 'recognizing text') {
               setStatus('OCR... ' + Math.round((m.progress || 0) * 100) + '%');
@@ -838,7 +844,7 @@ Righe: ${JSON.stringify(payload)}`;
             'anthropic-dangerous-direct-browser-access': 'true'
           },
           body: JSON.stringify({
-            model: 'claude-3-5-haiku-latest',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 900,
             messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }]
           })
@@ -978,6 +984,11 @@ Righe: ${JSON.stringify(payload)}`;
         { desc: 'Sconto fidelity', price: -4, isWine: false, uncertain: false, isDiscount: true }
       ];
       renderRows();
+    }
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js').then(r => r.update()).catch(() => {});
     }
 
     function resetAll() {
