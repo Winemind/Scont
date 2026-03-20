@@ -115,6 +115,7 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--ink);min-
     </div>
     <img id="preview" class="img-preview">
     <div class="sep">oppure</div>
+    <button class="btn-ghost" style="border-color:#C2571A;color:#C2571A;font-weight:500" onclick="showPaste()">📋 Incolla testo scontrino</button>
     <button class="btn-ghost" onclick="loadDemo()">🧾 Scontrino di esempio</button>
     <button class="btn-ghost" onclick="setKey()">🔑 API key Anthropic</button>
   </div>
@@ -274,89 +275,100 @@ async function toBase64(file){
   return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
 }
 
-const PROMPT=`Analizza questo scontrino. Rispondi SOLO con un array JSON grezzo, zero testo aggiuntivo.
+const PROMPT=`Hai ricevuto il testo grezzo di uno scontrino italiano.
+Analizzalo e restituisci SOLO un array JSON grezzo. Zero testo aggiuntivo, zero markdown.
 
 Formato: [{"desc":"Nome","price":9.50,"isWine":false}]
 
-LEGGI COSI' LO SCONTRINO:
-Ogni riga ha 3 colonne: NOME_PRODOTTO   IVA%   PREZZO
-Il prezzo e' l'ultimo numero a destra. La colonna IVA (22,00% ecc) va ignorata.
-Converti virgola in punto: 8,45 diventa 8.45
+REGOLE:
+1. PREZZI: usa punto decimale (8.45). Se ci sono 3 colonne (NOME  IVA%  PREZZO), il prezzo e' l'ULTIMO numero.
+2. SCONTI: righe con numero negativo (es: -1,90) -> price negativo (-1.90). NON ignorarle mai.
+3. DESCRIZIONI: rimuovi prefisso lettera singola iniziale (T, C, X) + spazio. Testo leggibile.
+4. isWine:true per: Montepulciano, Friulano, Chianti, Barolo, Brunello, Prosecco, Lambrusco,
+   Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Soave, Amarone, Primitivo, Verdicchio,
+   Moscato, Barbera + DOC/DOCG/IGT + Birra/Beer/Lager/IPA + Grappa/Amaro/Gin/Vodka/Rum/Whisky
+   NOTA: Montepulciano=VINO, Friulano=VINO
+5. NON includere: Totale, Subtotale, IVA, Pagamento, Contanti, Carta, Resto, Raccolta punti, Saldo, P.IVA, date, ore, barcode`;
 
-SCONTI:
-Le righe in grassetto con prezzo negativo sono sconti.
--1,90 diventa price: -1.90  (negativo, con il meno)
-Esempio da questo scontrino:
-  "FRIULANO MARGHE   22,00%   -1,90"  =>  {"desc":"Sconto Friulano Margherita","price":-1.90,"isWine":false}
-  "FRIULANO MARGHE   22,00%   -1,90"  =>  {"desc":"Sconto Friulano Margherita","price":-1.90,"isWine":false}
-Ci sono DUE sconti da -1,90 in questo scontrino. Includili entrambi.
-
-DESCRIZIONI:
-- Togli prefisso lettera singola iniziale: "T LIMONI" -> "Limoni", "X FRIULANO" -> "Friulano", "C PANE" -> "Pane"
-- Testo leggibile, non tutto maiuscolo
-
-isWine true SE bevanda alcolica:
-- Vini: Montepulciano (VINO!), Friulano (VINO!), Chianti, Barolo, Brunello, Prosecco,
-  Lambrusco, Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Soave, Amarone,
-  Primitivo, Verdicchio, Moscato, Barbera + DOC/DOCG/IGT
-- Birre: Birra, Beer, Lager, IPA, Weiss, Pils
-- Alcolici: Grappa, Amaro, Gin, Vodka, Rum, Whisky, Limoncello, Aperol, Campari
-
-NON INCLUDERE:
-Totale, Subtotale, IVA, Pagamento, Contanti, Carta, Resto, Importo pagato,
-Raccolta punti, Saldo, 0,30 punti, P.IVA, date, ore, barcode, intestazione negozio
-
-OUTPUT ATTESO PER QUESTO SCONTRINO PAM:
-[
-{"desc":"Montepulciano Masciarelli","price":8.45,"isWine":true},
-{"desc":"Pane hamburger s/glutine","price":3.75,"isWine":false},
-{"desc":"Molisana passata","price":1.50,"isWine":false},
-{"desc":"Friulano Margherita","price":6.40,"isWine":true},
-{"desc":"Sconto Friulano Margherita","price":-1.90,"isWine":false},
-{"desc":"Montepulciano Masciarelli","price":8.45,"isWine":true},
-{"desc":"Shopper","price":0.15,"isWine":false},
-{"desc":"Shopper","price":0.15,"isWine":false},
-{"desc":"Pane casareccio s/glutine","price":4.50,"isWine":false},
-{"desc":"Satos capperi gambo","price":4.10,"isWine":false},
-{"desc":"Friulano Margherita","price":6.40,"isWine":true},
-{"desc":"Sconto Friulano Margherita","price":-1.90,"isWine":false},
-{"desc":"Limoni rete kg 1","price":2.29,"isWine":false},
-{"desc":"Pompelmi gr 750","price":1.99,"isWine":false}
-]`;
-
-async function analyzeImage(file,attempt=1){
+async function analyzeImage(file, attempt=1){
   let key=getKey();
   if(!key){
     const k=prompt('Inserisci la tua API key Anthropic:');
-    if(!k){showManual('API key necessaria per il riconoscimento automatico.');return;}
+    if(!k){showManual('API key necessaria.');return;}
     saveKey(k);key=k.trim();
   }
   try{
-    setStatus(attempt===1?'Compressione…':'Nuovo tentativo ('+attempt+'/3)…');
+    setStatus('Compressione immagine…');
     const comp=await compress(file);
     const mb=(comp.size/1024/1024).toFixed(1);
-    setStatus('Analisi con Claude AI… ('+mb+' MB)');
     const b64=await toBase64(comp);
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({
-        model:'claude-opus-4-5',
-        max_tokens:2048,
-        messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
-          {type:'text',text:PROMPT}
-        ]}]
-      })
-    });
-    if(resp.status===401){saveKey('');noStatus();showManual('API key non valida. Aggiornala con il tasto apposito.');return;}
-    if((resp.status===529||resp.status===500)&&attempt<3){await new Promise(r=>setTimeout(r,attempt*2000));return analyzeImage(file,attempt+1);}
-    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+resp.status);}
-    const data=await resp.json();
-    const text=(data.content||[]).map(b=>b.text||'').join('\n').trim();
-    parseClaudeResponse(text);
-  }catch(e){noStatus();console.error(e);showManual('Errore: '+(e.message||'rete')+'. Inserisci manualmente:');}
+
+    // PASSO 1: trascrizione testo grezzo
+    setStatus('Passo 1/2: lettura scontrino… ('+mb+' MB)');
+    const r1=await callClaude(key,[
+      {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+      {type:'text',text:`Trascrivi questo scontrino ESATTAMENTE riga per riga.
+Copia ogni riga com'e', inclusi numeri negativi come -1,90.
+Non interpretare, non modificare, non aggiungere nulla.
+Solo il testo grezzo dello scontrino, riga per riga.`}
+    ], 1024);
+
+    if(!r1.ok){
+      if((r1.status===529||r1.status===500)&&attempt<3){
+        await wait(attempt*2000);
+        return analyzeImage(file,attempt+1);
+      }
+      const e=await r1.json().catch(()=>({}));
+      if(r1.status===401){saveKey('');noStatus();showManual('API key non valida.');return;}
+      throw new Error(e?.error?.message||'HTTP '+r1.status);
+    }
+    const d1=await r1.json();
+    const rawText=(d1.content||[]).map(b=>b.text||'').join('
+').trim();
+    console.log('Testo trascritto:', rawText);
+
+    // PASSO 2: interpretazione JSON dal testo trascritto
+    setStatus('Passo 2/2: interpretazione dati…');
+    const r2=await callClaude(key,[
+      {type:'text',text:PROMPT+'
+
+TESTO SCONTRINO:
+'+rawText}
+    ], 2048);
+
+    if(!r2.ok){
+      const e=await r2.json().catch(()=>({}));
+      throw new Error(e?.error?.message||'HTTP '+r2.status);
+    }
+    const d2=await r2.json();
+    const jsonText=(d2.content||[]).map(b=>b.text||'').join('
+').trim();
+    parseClaudeResponse(jsonText);
+
+  }catch(e){
+    noStatus();
+    console.error(e);
+    showManual('Errore: '+(e.message||'rete')+'. Inserisci manualmente:');
+  }
 }
+
+async function callClaude(key, content, maxTokens){
+  return fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:'claude-opus-4-5',
+      max_tokens:maxTokens,
+      messages:[{role:'user',content}]
+    })
+  });
+}
+
 
 function parseClaudeResponse(text){
   try{
@@ -382,16 +394,63 @@ function parseManual(){
   const txt=document.getElementById('manualText').value.trim();
   if(!txt){toast('Inserisci del testo prima');return;}
   rows=[];
+
+  const skipRe=/^(totale|subtotale|di cui|^iva|pagamento|contanti|carta|bancomat|resto|importo|raccolta|saldo|spesa val|p\.iva|descrizione|codice|arrivederci|grazie|documento|barcode|oper\.|art\s|trn\s|neg\s|doc\s)/i;
+
   for(const line of txt.split('\n').map(l=>l.trim()).filter(Boolean)){
-    const m=line.match(/^(.+?)\s+([-]?\d{1,4}[.,]\d{2})\s*$/);
-    if(!m)continue;
-    const price=parseFloat(m[2].replace(',','.'));
-    if(isNaN(price)||price===0)continue;
-    rows.push({desc:m[1].trim(),price,isWine:false,uncertain:false,isDiscount:price<0});
+    if(line.length<3)continue;
+    if(skipRe.test(line))continue;
+    if(/^[-=*]{3,}/.test(line))continue;
+
+    let desc=null, price=null;
+
+    // Formato PAM: NOME   22,00%   -1,90
+    const pamRe=/^(.+?)\s{2,}\d{1,2}[,.]\d{2}%\s+(-?\d{1,4}[,.]\d{2})\s*$/;
+    let m=line.match(pamRe);
+    if(m){desc=m[1].trim();price=parseFloat(m[2].replace(',','.'));}
+
+    // Formato standard: NOME   8,45
+    if(!m){
+      const stdRe=/^(.+?)\s{2,}(-?\d{1,4}[,.]\d{2})\s*[€$]?\s*$/;
+      m=line.match(stdRe);
+      if(m){desc=m[1].trim();price=parseFloat(m[2].replace(',','.'));}
+    }
+
+    // Formato semplice: Descrizione 8.45
+    if(!m){
+      const simRe=/^(.+?)\s+(-?\d{1,4}[,.]\d{2})\s*$/;
+      m=line.match(simRe);
+      if(m){desc=m[1].trim();price=parseFloat(m[2].replace(',','.'));}
+    }
+
+    if(!desc||price===null||isNaN(price)||price===0||Math.abs(price)>999)continue;
+
+    // Rimuovi prefisso lettera PAM
+    desc=desc.replace(/^[TCXBFMR]\s+/,'').trim();
+    // Rimuovi IVA residua
+    desc=desc.replace(/\s+\d{1,2}[,.]\d{2}%\s*$/,'').trim();
+    if(!desc||desc.length<2)continue;
+
+    const isDiscount=price<0;
+    const isWine=guessWine(desc);
+    rows.push({desc,price,isWine,uncertain:false,isDiscount});
   }
   hideManual();
-  if(rows.length===0){toast('Nessuna voce valida');return;}
+  if(rows.length===0){toast('Nessuna voce valida trovata');return;}
   renderRows();toast('✓ '+rows.length+' voci');
+}
+
+// Riconosce vini dalle parole chiave
+function guessWine(desc){
+  const d=(desc+' ').toLowerCase();
+  const kw=['vino','wine','rosso','bianco','rosato','prosecco','champagne','spumante',
+    'frizzante','lambrusco','montepulciano','friulano','chianti','barolo','brunello',
+    'merlot','cabernet','sangiovese','pinot','vermentino','ribolla','soave','amarone',
+    'valpolicella','primitivo','verdicchio','moscato','barbera','dolcetto','nebbiolo',
+    'aglianico','franciacorta','doc ','docg','igt ','birra','beer','lager','ipa',
+    'weiss','pils','grappa','amaro','gin ','vodka','rum ','whisky','limoncello',
+    'aperol','campari','spritz','bottiglia','bottigl'];
+  return kw.some(k=>d.includes(k));
 }
 
 function loadDemo(){
@@ -476,6 +535,14 @@ function setStatus(msg){document.getElementById('statusMsg').textContent=msg;doc
 function noStatus(){document.getElementById('statusBar').classList.remove('on');}
 let tT;
 function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>el.classList.remove('on'),3000);}
+function showPaste(){
+  document.getElementById('manualNote').textContent='📋 Incolla il testo dello scontrino (copia dal PDF o digita manualmente):';
+  document.getElementById('manualBox').classList.add('on');
+  document.getElementById('rowsSection').classList.add('on');
+  setTimeout(()=>document.getElementById('manualText').focus(),100);
+  document.getElementById('rowsSection').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 function showManual(msg){document.getElementById('manualNote').textContent=msg||'Inserisci manualmente:';document.getElementById('manualBox').classList.add('on');document.getElementById('rowsSection').classList.add('on');}
 function hideManual(){document.getElementById('manualBox').classList.remove('on');}
 function reset(){rows=[];document.getElementById('rowsList').innerHTML='';['rowsSection','resultSection'].forEach(id=>document.getElementById(id).classList.remove('on'));document.getElementById('manualBox').classList.remove('on');document.getElementById('manualText').value='';const p=document.getElementById('preview');p.classList.remove('on');p.src='';window.scrollTo({top:0,behavior:'smooth'});toast('Azzerato ✓');}
