@@ -206,6 +206,28 @@ function toBase64(file){
 
 function wait(ms){return new Promise(r=>setTimeout(r,ms));}
 
+const PROMPT=`Analizza questo scontrino italiano. Rispondi SOLO con un array JSON grezzo, zero testo aggiuntivo.
+
+Formato: [{"desc":"Nome","price":9.50,"isWine":false}]
+
+STRUTTURA SCONTRINO PAM (3 colonne: NOME  IVA%  PREZZO):
+- Il prezzo e' l'ULTIMO numero della riga. La colonna IVA (22,00% ecc) va ignorata.
+- Virgola in punto: 8,45 -> 8.45
+- Righe in grassetto con prezzo NEGATIVO = sconti. Includili con price negativo: -1.90
+- Rimuovi prefisso lettera singola iniziale (T, C, X) se seguito da spazio
+- Testo leggibile, non tutto maiuscolo
+
+isWine:true per: Montepulciano, Friulano, Chianti, Barolo, Brunello, Prosecco, Lambrusco,
+Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Soave, Amarone, Primitivo, Verdicchio,
+Moscato, Barbera + DOC/DOCG/IGT + Birra/Beer/Lager/IPA + Grappa/Amaro/Gin/Vodka/Rum/Whisky/Limoncello/Aperol/Campari
+
+NON includere: Totale, Subtotale, IVA, Pagamento, Contanti, Carta, Resto, Raccolta punti, Saldo, P.IVA, barcode
+
+Esempio:
+"FRIULANO MARGHE   22,00%   -1,90" -> {"desc":"Sconto Friulano","price":-1.90,"isWine":false}
+"MONTEPULCIANO MASC   22,00%   8,45" -> {"desc":"Montepulciano Masciarelli","price":8.45,"isWine":true}
+"T MOLISANA PASSATA   4,00%   1,50" -> {"desc":"Molisana passata","price":1.50,"isWine":false}\`;
+
 async function analyzePDF(file){
   // Renderizza il PDF come immagine ad alta risoluzione e manda a Claude
   try{
