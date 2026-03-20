@@ -103,7 +103,7 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--ink);min-
 <body>
 <div class="header">
   <h1>🍽 Dividi <em>Scontrino</em></h1>
-  <p>Divisione automatica del conto &nbsp;·&nbsp; <span style="color:var(--terra2);font-weight:500">v2.2</span></p>
+  <p>Divisione automatica del conto &nbsp;·&nbsp; <span style="color:var(--terra2);font-weight:500">v2.3</span></p>
 </div>
 <div class="wrap">
   <div class="card">
@@ -153,6 +153,15 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--ink);min-
 <div class="toast" id="toast"></div>
 
 <script>
+// Cattura qualsiasi errore JS e lo mostra
+window.onerror = function(msg, src, line){
+  alert('Errore JS: ' + msg + ' (riga ' + line + ')');
+  return false;
+};
+window.onunhandledrejection = function(e){
+  alert('Errore async: ' + (e.reason?.message || e.reason || 'sconosciuto'));
+};
+
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 let rows=[];
