@@ -437,10 +437,64 @@ function parseManual(){
   }
   hideManual();
   if(rows.length===0){toast('Nessuna voce valida trovata');return;}
-  renderRows();toast('✓ '+rows.length+' voci');
+
+  // Prova a classificare i vini con Claude se abbiamo la key
+  const key=getKey();
+  if(key){
+    classifyWinesWithClaude(key);
+  } else {
+    // Fallback locale
+    rows.forEach(r=>{ if(!r.isDiscount) r.isWine=guessWine(r.desc); });
+    renderRows();
+    toast('✓ '+rows.length+' voci');
+  }
 }
 
-// Riconosce vini dalle parole chiave
+async function classifyWinesWithClaude(key){
+  setStatus('Classificazione vini con Claude…');
+  try{
+    const items=rows.filter(r=>!r.isDiscount).map((r,i)=>i+'. '+r.desc).join('\n');
+    const resp=await callClaude(key,[{type:'text',text:`Analizza questi prodotti di uno scontrino italiano.
+Per ognuno dimmi se è una bevanda alcolica (vino, birra, superalcolico) oppure no.
+Rispondi SOLO con un array JSON: [{"i":0,"isWine":true}, {"i":1,"isWine":false}, ...]
+dove "i" è il numero di riga (0-based tra i soli prodotti non-sconto).
+
+Prodotti:
+${items}
+
+Considera alcolici: vini DOC/DOCG/IGT, vitigni italiani (Montepulciano, Friulano, Chianti,
+Barolo, Prosecco, Lambrusco, Merlot, Cabernet, Sangiovese, Pinot, Vermentino, Soave,
+Amarone, Primitivo, Verdicchio, Moscato, Barbera, Aglianico ecc.),
+birre, grappa, amaro, gin, vodka, rum, whisky, limoncello, aperol, campari.
+Solo JSON, nient'altro.`}], 512);
+
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const data=await resp.json();
+    const text=(data.content||[]).map(b=>b.text||'').join('').trim();
+    const match=text.match(/\[[\s\S]*\]/);
+    if(!match) throw new Error('no JSON');
+    const classifications=JSON.parse(match[0]);
+
+    // Applica classificazioni
+    const nonDiscount=rows.filter(r=>!r.isDiscount);
+    classifications.forEach(({i,isWine})=>{
+      if(nonDiscount[i]) nonDiscount[i].isWine=!!isWine;
+    });
+
+    noStatus();
+    renderRows();
+    const nVini=rows.filter(r=>r.isWine).length;
+    toast('✓ '+rows.length+' voci · '+nVini+' vini riconosciuti');
+  } catch(e){
+    noStatus();
+    console.error('Wine classification error:', e);
+    // Fallback locale silenzioso
+    rows.forEach(r=>{ if(!r.isDiscount) r.isWine=guessWine(r.desc); });
+    renderRows();
+    toast('✓ '+rows.length+' voci');
+  }
+}
+
 function guessWine(desc){
   const d=(desc+' ').toLowerCase();
   const kw=['vino','wine','rosso','bianco','rosato','prosecco','champagne','spumante',
