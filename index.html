@@ -77,7 +77,7 @@
 <body>
   <div class="header">
     <h1>Dividi Scontrino AI</h1>
-    <p>v3.0 &nbsp;·&nbsp; OCR locale + AI classificazione</p>
+    <p>v3.1 &nbsp;·&nbsp; OCR locale + AI classificazione</p>
   </div>
   <div class="wrap">
     <div class="card">
@@ -148,9 +148,24 @@
     $('addRowBtn').addEventListener('click', () => { state.rows.push({desc:'',price:0,isWine:false,uncertain:true,isDiscount:false}); renderRows(); });
     $('calcBtn').addEventListener('click', calculate);
 
-    $('pdfInput').addEventListener('change', async e => { const f=e.target.files[0]; if(f) await processPDF(f); e.target.value=''; });
-    $('imgInput').addEventListener('change', async e => { const f=e.target.files[0]; if(f) await processImage(f); e.target.value=''; });
-    $('camInput').addEventListener('change', async e => { const f=e.target.files[0]; if(f) await processImage(f); e.target.value=''; });
+    $('pdfInput').addEventListener('change', async e => {
+      const f=e.target.files[0];
+      if(!f){alert('Nessun file selezionato');return;}
+      await processPDF(f);
+      e.target.value='';
+    });
+    $('imgInput').addEventListener('change', async e => {
+      const f=e.target.files[0];
+      if(!f){alert('Nessun file selezionato');return;}
+      await processImage(f);
+      e.target.value='';
+    });
+    $('camInput').addEventListener('change', async e => {
+      const f=e.target.files[0];
+      if(!f){alert('Nessun file selezionato');return;}
+      await processImage(f);
+      e.target.value='';
+    });
 
     async function processPDF(file) {
       try {
