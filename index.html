@@ -1,7 +1,8 @@
-<!DOCTYPE html><html lang="it">
+<!DOCTYPE html>
+<html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Dividi Scontrino AI</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1c1917">
@@ -12,388 +13,426 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
-    :root{
-      --bg:#f7f3ed;--card:#fff;--ink:#1c1917;--muted:#78716c;--border:#e7e0d8;
-      --terra:#c2571a;--terra-dark:#a8431a;--wine:#7c2d3f;--wine-bg:#fdf2f4;
-      --food:#2d6a4f;--food-bg:#f0faf5;--disc:#1d4ed8;--disc-bg:#eff6ff;--warn:#92400e;--warn-bg:#fffbeb;
+    :root {
+      --bg:#f7f3ed; --card:#fff; --ink:#1c1917; --muted:#78716c; --border:#e7e0d8;
+      --terra:#c2571a; --terra-dark:#a8431a; --wine:#7c2d3f; --wine-bg:#fdf2f4;
+      --food:#2d6a4f; --food-bg:#f0faf5; --disc:#1d4ed8; --disc-bg:#eff6ff;
+      --warn:#92400e; --warn-bg:#fffbeb;
     }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);padding-bottom:48px}
-    .header{background:#1c1917;color:#f7f3ed;text-align:center;padding:18px 14px}
-    .header h1{margin:0;font-size:1.5rem;font-weight:800}
-    .header p{margin:4px 0 0;color:#b8b0a8;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase}
-    .wrap{max-width:760px;margin:0 auto;padding:14px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px;margin-top:14px;box-shadow:0 6px 24px rgba(0,0,0,.06)}
-    .title{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:1.05rem;font-weight:800}
-    .badge{width:24px;height:24px;border-radius:50%;background:var(--terra);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem}
-    .upload-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-    .upload{position:relative;border:1.5px dashed var(--border);border-radius:14px;background:#faf8f5;min-height:92px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;cursor:pointer}
-    .upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
-    .upload .icon{font-size:1.5rem}
-    .upload .label{font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-    button{border:none;border-radius:12px;padding:12px 14px;font-size:.94rem;cursor:pointer}
-    .btn-primary{background:var(--terra);color:#fff;font-weight:700}
-    .btn-primary:hover{background:var(--terra-dark)}
-    .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--ink)}
-    .status{display:none;margin-top:12px;background:#1c1917;color:#fff;padding:12px 14px;border-radius:12px;font-size:.86rem}
-    .status.on{display:block}
-    .preview{display:none;width:100%;max-height:220px;object-fit:contain;background:#faf8f5;border:1px solid var(--border);border-radius:12px;margin-top:12px}
-    .preview.on{display:block}
-    .manual{display:none;margin-top:12px}
-    .manual.on{display:block}
-    textarea{width:100%;min-height:120px;border:1px solid var(--border);border-radius:12px;padding:12px;font:inherit;background:#faf8f5}
-    .hint{font-size:.78rem;color:var(--muted);margin-top:8px;line-height:1.5}
-    .warn{background:var(--warn-bg);color:var(--warn);padding:10px 12px;border-radius:12px;font-size:.8rem;margin-bottom:10px}
-    .rows,.results{display:none}
-    .rows.on,.results.on{display:block}
-    .row{display:grid;grid-template-columns:1.4fr .55fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
-    .row:last-child{border-bottom:none}
-    .row input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#faf8f5;font:inherit}
-    .tag{padding:10px 12px;border-radius:999px;font-weight:700;font-size:.8rem;white-space:nowrap}
-    .tag.food{background:var(--food-bg);color:var(--food)}
-    .tag.wine{background:var(--wine-bg);color:var(--wine)}
-    .tag.disc{background:var(--disc-bg);color:var(--disc);cursor:default}
-    .uncertain{outline:2px solid #f59e0b}
-    .small{font-size:.78rem;color:var(--muted)}
-    .totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-    .box{padding:14px;border-radius:14px;text-align:center}
-    .box .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:6px}
-    .box .v{font-size:1.4rem;font-weight:800}
-    .box.wine{background:var(--wine-bg);color:var(--wine)}
-    .box.food{background:var(--food-bg);color:var(--food)}
-    .box.disc{background:var(--disc-bg);color:var(--disc)}
-    .people{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
-    .person{background:#faf8f5;border:1px solid var(--border);border-radius:14px;padding:14px}
-    .person .name{font-size:.84rem;color:var(--muted)}
-    .person .amt{font-size:1.5rem;font-weight:800;margin-top:4px}
-    .person .sub{font-size:.78rem;color:var(--muted);margin-top:5px;line-height:1.45}
-    @media (max-width:700px){
-      .upload-grid,.totals,.people{grid-template-columns:1fr}
-      .row{grid-template-columns:1fr}
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); font-family:system-ui,-apple-system,sans-serif; color:var(--ink); padding-bottom:48px; }
+    .header { background:#1c1917; color:#f7f3ed; text-align:center; padding:18px 14px; }
+    .header h1 { margin:0; font-size:1.5rem; font-weight:800; }
+    .header p { margin:4px 0 0; color:#b8b0a8; font-size:.78rem; letter-spacing:.04em; text-transform:uppercase; }
+    .wrap { max-width:760px; margin:0 auto; padding:14px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:16px; margin-top:14px; box-shadow:0 6px 24px rgba(0,0,0,.06); }
+    .title { display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:1.05rem; font-weight:800; }
+    .badge { width:24px; height:24px; border-radius:50%; background:var(--terra); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:.8rem; }
+    .upload-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .upload { position:relative; border:1.5px dashed var(--border); border-radius:14px; background:#faf8f5; min-height:92px; padding:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center; cursor:pointer; }
+    .upload input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .upload .icon { font-size:1.5rem; }
+    .upload .label { font-size:.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    button { border:none; border-radius:12px; padding:12px 14px; font-size:.94rem; cursor:pointer; }
+    .btn-primary { background:var(--terra); color:#fff; font-weight:700; }
+    .btn-primary:hover { background:var(--terra-dark); }
+    .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--ink); }
+    .status { display:none; margin-top:12px; background:#1c1917; color:#fff; padding:12px 14px; border-radius:12px; font-size:.86rem; }
+    .status.on { display:block; }
+    .preview { display:none; width:100%; max-height:220px; object-fit:contain; background:#faf8f5; border:1px solid var(--border); border-radius:12px; margin-top:12px; }
+    .preview.on { display:block; }
+    .manual { display:none; margin-top:12px; }
+    .manual.on { display:block; }
+    textarea { width:100%; min-height:120px; border:1px solid var(--border); border-radius:12px; padding:12px; font:inherit; background:#faf8f5; }
+    .hint { font-size:.78rem; color:var(--muted); margin-top:8px; line-height:1.5; }
+    .warn { background:var(--warn-bg); color:var(--warn); padding:10px 12px; border-radius:12px; font-size:.8rem; margin-bottom:10px; }
+    .rows, .results { display:none; }
+    .rows.on, .results.on { display:block; }
+    .row { display:grid; grid-template-columns:1.4fr .55fr auto auto; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); }
+    .row:last-child { border-bottom:none; }
+    .row input { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#faf8f5; font:inherit; }
+    .tag { padding:10px 12px; border-radius:999px; font-weight:700; font-size:.8rem; white-space:nowrap; }
+    .tag.food { background:var(--food-bg); color:var(--food); }
+    .tag.wine { background:var(--wine-bg); color:var(--wine); }
+    .tag.disc { background:var(--disc-bg); color:var(--disc); cursor:default; }
+    .uncertain { outline:2px solid #f59e0b; }
+    .small { font-size:.78rem; color:var(--muted); }
+    .totals { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .box { padding:14px; border-radius:14px; text-align:center; }
+    .box .k { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; font-weight:700; margin-bottom:6px; }
+    .box .v { font-size:1.4rem; font-weight:800; }
+    .box.wine { background:var(--wine-bg); color:var(--wine); }
+    .box.food { background:var(--food-bg); color:var(--food); }
+    .box.disc { background:var(--disc-bg); color:var(--disc); }
+    .people { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px; }
+    .person { background:#faf8f5; border:1px solid var(--border); border-radius:14px; padding:14px; }
+    .person .name { font-size:.84rem; color:var(--muted); }
+    .person .amt { font-size:1.5rem; font-weight:800; margin-top:4px; }
+    .person .sub { font-size:.78rem; color:var(--muted); margin-top:5px; line-height:1.45; }
+    @media (max-width:700px) {
+      .upload-grid, .totals, .people { grid-template-columns:1fr; }
+      .row { grid-template-columns:1fr; }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Dividi Scontrino AI</h1>
-    <p>v3.1 &nbsp;·&nbsp; OCR locale + AI classificazione</p>
+<div class="header">
+  <h1>Dividi Scontrino AI</h1>
+  <p>v3.2 &nbsp;·&nbsp; OCR locale + AI classificazione</p>
+</div>
+<div class="wrap">
+  <div class="card">
+    <div class="title"><span class="badge">1</span> Carica scontrino</div>
+    <div class="upload-grid">
+      <label class="upload"><span class="icon">&#128196;</span><span class="label">PDF</span><input id="inPdf" type="file" accept="application/pdf"></label>
+      <label class="upload"><span class="icon">&#128444;</span><span class="label">Immagine</span><input id="inImg" type="file" accept="image/*"></label>
+      <label class="upload"><span class="icon">&#128247;</span><span class="label">Foto</span><input id="inCam" type="file" accept="image/*" capture="environment"></label>
+    </div>
+    <img id="preview" class="preview" alt="">
+    <div class="actions">
+      <button class="btn-ghost" id="btnPaste">&#128203; Incolla testo</button>
+      <button class="btn-ghost" id="btnDemo">&#129534; Demo</button>
+      <button class="btn-ghost" id="btnKey">&#128273; API key</button>
+      <button class="btn-ghost" id="btnReset">&#128260; Reset</button>
+    </div>
+    <div id="status" class="status"></div>
+    <div id="manualBox" class="manual">
+      <div class="warn">Incolla il testo dello scontrino (funziona meglio con PDF copiati).</div>
+      <textarea id="manualText" placeholder="Pasta 9.50&#10;Lambrusco 12.00&#10;Acqua 2.50"></textarea>
+      <div class="actions"><button class="btn-primary" id="btnParseText">Analizza testo</button></div>
+    </div>
+    <div class="hint">PDF: estrazione testo diretta. Immagine/Foto: OCR locale. AI (opzionale) per classificare vino/cibo.</div>
   </div>
-  <div class="wrap">
-    <div class="card">
-      <div class="title"><span class="badge">1</span> Carica scontrino</div>
-      <div class="upload-grid">
-        <label class="upload"><span class="icon">&#128196;</span><span class="label">PDF</span><input id="pdfInput" type="file" accept="application/pdf" /></label>
-        <label class="upload"><span class="icon">&#128444;&#65039;</span><span class="label">Immagine</span><input id="imgInput" type="file" accept="image/*" /></label>
-        <label class="upload"><span class="icon">&#128247;</span><span class="label">Foto</span><input id="camInput" type="file" accept="image/*" capture="environment" /></label>
-      </div>
-      <img id="preview" class="preview" alt="Anteprima" />
-      <div class="actions">
-        <button class="btn-ghost" id="pasteBtn">&#128203; Incolla testo</button>
-        <button class="btn-ghost" id="demoBtn">&#129534; Demo</button>
-        <button class="btn-ghost" id="keyBtn">&#128273; API key AI</button>
-        <button class="btn-ghost" id="resetBtn">&#128260; Reset</button>
-      </div>
-      <div id="status" class="status"></div>
-      <div id="manualBox" class="manual">
-        <div class="warn">Incolla il testo dello scontrino. Funziona meglio con PDF copiati.</div>
-        <textarea id="manualText" placeholder="Pasta 9.50&#10;Lambrusco 12.00&#10;Acqua 2.50"></textarea>
-        <div class="actions">
-          <button class="btn-primary" id="parseTextBtn">Analizza testo</button>
-        </div>
-      </div>
-      <div class="hint">PDF: estrazione testo diretta. Immagine: OCR locale. AI solo per classificare vino/cibo.</div>
-    </div>
 
-    <div id="rowsCard" class="card rows">
-      <div class="title"><span class="badge">2</span> Voci estratte</div>
-      <div class="small">Tocca il badge per cambiare vino/cibo. Righe incerte evidenziate in giallo.</div>
-      <div id="rowsList"></div>
-      <div class="actions">
-        <button class="btn-ghost" id="addRowBtn">+ Aggiungi voce</button>
-        <button class="btn-primary" id="calcBtn">Calcola</button>
-      </div>
-    </div>
-
-    <div id="resultCard" class="card results">
-      <div class="title"><span class="badge">3</span> Riepilogo</div>
-      <div id="totals" class="totals"></div>
-      <div id="people" class="people"></div>
-      <div class="actions" style="margin-top:14px">
-        <button class="btn-ghost" id="resetBtn2">&#128260; Riparti da capo</button>
-      </div>
+  <div id="rowsCard" class="card rows">
+    <div class="title"><span class="badge">2</span> Voci estratte</div>
+    <div class="small">Tocca il badge per cambiare vino/cibo. Giallo = incerto.</div>
+    <div id="rowsList"></div>
+    <div class="actions">
+      <button class="btn-ghost" id="btnAddRow">+ Aggiungi voce</button>
+      <button class="btn-primary" id="btnCalc">Calcola</button>
     </div>
   </div>
 
-  <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  <div id="resultCard" class="card results">
+    <div class="title"><span class="badge">3</span> Riepilogo</div>
+    <div id="totals" class="totals"></div>
+    <div id="people" class="people"></div>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn-ghost" id="btnReset2">&#128260; Riparti da capo</button>
+    </div>
+  </div>
+</div>
 
-    const state = { rows: [] };
-    const $ = id => document.getElementById(id);
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    function setStatus(msg) { const el=$('status'); el.textContent=msg; el.classList.add('on'); }
-    function clearStatus() { const el=$('status'); el.classList.remove('on'); el.textContent=''; }
-    function getKey() { return localStorage.getItem('anthropic_key')||''; }
-    function saveKey(v) { localStorage.setItem('anthropic_key', v.trim()); }
+var state = { rows: [] };
+function $(id) { return document.getElementById(id); }
+function setStatus(msg) { $('status').textContent = msg; $('status').classList.add('on'); }
+function clearStatus() { $('status').classList.remove('on'); $('status').textContent = ''; }
+function getKey() { return localStorage.getItem('ak') || ''; }
+function saveKey(v) { localStorage.setItem('ak', v.trim()); }
 
-    $('keyBtn').addEventListener('click', () => {
-      const v = prompt('Incolla la tua API key Anthropic', getKey());
-      if (v !== null) { saveKey(v); alert('Salvata!'); }
-    });
-    $('pasteBtn').addEventListener('click', () => $('manualBox').classList.toggle('on'));
-    $('demoBtn').addEventListener('click', loadDemo);
-    $('resetBtn').addEventListener('click', resetAll);
-    $('resetBtn2').addEventListener('click', resetAll);
-    $('parseTextBtn').addEventListener('click', () => { const t=$('manualText').value.trim(); if(t) processRawText(t); });
-    $('addRowBtn').addEventListener('click', () => { state.rows.push({desc:'',price:0,isWine:false,uncertain:true,isDiscount:false}); renderRows(); });
-    $('calcBtn').addEventListener('click', calculate);
+$('btnKey').addEventListener('click', function() {
+  var v = prompt('Incolla la tua API key Anthropic', getKey());
+  if (v !== null) { saveKey(v); alert('Salvata!'); }
+});
+$('btnPaste').addEventListener('click', function() { $('manualBox').classList.toggle('on'); });
+$('btnDemo').addEventListener('click', loadDemo);
+$('btnReset').addEventListener('click', resetAll);
+$('btnReset2').addEventListener('click', resetAll);
+$('btnParseText').addEventListener('click', function() {
+  var t = $('manualText').value.trim();
+  if (t) processRawText(t);
+});
+$('btnAddRow').addEventListener('click', function() {
+  state.rows.push({ desc:'', price:0, isWine:false, uncertain:true, isDiscount:false });
+  renderRows();
+});
+$('btnCalc').addEventListener('click', calculate);
 
-    $('pdfInput').addEventListener('change', async e => {
-      const f=e.target.files[0];
-      if(!f){alert('Nessun file selezionato');return;}
-      await processPDF(f);
-      e.target.value='';
-    });
-    $('imgInput').addEventListener('change', async e => {
-      const f=e.target.files[0];
-      if(!f){alert('Nessun file selezionato');return;}
-      await processImage(f);
-      e.target.value='';
-    });
-    $('camInput').addEventListener('change', async e => {
-      const f=e.target.files[0];
-      if(!f){alert('Nessun file selezionato');return;}
-      await processImage(f);
-      e.target.value='';
-    });
+$('inPdf').addEventListener('change', function(e) {
+  var f = e.target.files[0];
+  if (f) processPDF(f);
+  e.target.value = '';
+});
+$('inImg').addEventListener('change', function(e) {
+  var f = e.target.files[0];
+  if (f) processImage(f);
+  e.target.value = '';
+});
+$('inCam').addEventListener('change', function(e) {
+  var f = e.target.files[0];
+  if (f) processImage(f);
+  e.target.value = '';
+});
 
-    async function processPDF(file) {
-      try {
-        setStatus('Lettura PDF...');
-        const ab = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({data:ab}).promise;
-        let text = '';
-        for (let i=1; i<=pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          const items = content.items;
-          let lastY = null;
-          for (const item of items) {
-            const y = Math.round(item.transform[5]);
-            if (lastY !== null && Math.abs(y - lastY) > 3) text += '
-';
-            text += item.str + ' ';
-            lastY = y;
-          }
-          text += '
-';
-        }
-        if (text.replace(/\s+/g,'').length > 40) {
-          await processRawText(text);
-        } else {
-          setStatus('PDF immagine: render + OCR...');
-          const page = await pdf.getPage(1);
-          const vp = page.getViewport({scale:2.5});
-          const cv = document.createElement('canvas');
-          cv.width=vp.width; cv.height=vp.height;
-          await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-          const blob = await new Promise(r => cv.toBlob(r,'image/jpeg',0.95));
-          await processImage(blob);
-        }
-      } catch(err) { clearStatus(); alert('Errore PDF: '+err.message); }
-    }
-
-    async function processImage(file) {
-      try {
-        const url = URL.createObjectURL(file);
-        $('preview').src=url; $('preview').classList.add('on');
-        setStatus('OCR locale in corso...');
-        const {data} = await Tesseract.recognize(file, 'ita+eng', {
-          logger: m => { if(m.status==='recognizing text') setStatus('OCR... '+Math.round((m.progress||0)*100)+'%'); }
+function processPDF(file) {
+  setStatus('Lettura PDF...');
+  file.arrayBuffer().then(function(ab) {
+    return pdfjsLib.getDocument({ data: ab }).promise;
+  }).then(function(pdf) {
+    var text = '';
+    var chain = Promise.resolve();
+    for (var i = 1; i <= pdf.numPages; i++) {
+      (function(pageNum) {
+        chain = chain.then(function() {
+          return pdf.getPage(pageNum).then(function(page) {
+            return page.getTextContent().then(function(content) {
+              var lastY = null;
+              content.items.forEach(function(item) {
+                var y = Math.round(item.transform[5]);
+                if (lastY !== null && Math.abs(y - lastY) > 3) text += '\n';
+                text += item.str + ' ';
+                lastY = y;
+              });
+              text += '\n';
+            });
+          });
         });
-        await processRawText(data.text||'');
-      } catch(err) { clearStatus(); alert('Errore OCR: '+err.message); }
+      })(i);
     }
-
-    async function processRawText(rawText) {
-      try {
-        setStatus('Analisi righe...');
-        let rows = parseReceiptText(rawText);
-        if (!rows.length) { rows = parseSimpleLines(rawText); }
-        if (!rows.length) {
-          clearStatus();
-          $('manualBox').classList.add('on');
-          $('manualText').value = rawText;
-          alert('Nessuna voce trovata. Correggi il testo nella casella.');
-          return;
-        }
-        const key = getKey();
-        if (key) {
-          setStatus('AI: classificazione vino/cibo...');
-          rows = await classifyWithAI(rows, key);
-        } else {
-          rows = rows.map(r => ({...r, isWine: guessWine(r.desc)}));
-        }
-        state.rows = rows;
-        renderRows();
-        clearStatus();
-      } catch(err) { clearStatus(); alert('Errore: '+err.message); }
+    return chain.then(function() { return text; });
+  }).then(function(text) {
+    if (text.replace(/\s+/g, '').length > 40) {
+      processRawText(text);
+    } else {
+      setStatus('PDF scansionato: OCR...');
+      processRawText('');
     }
+  }).catch(function(err) {
+    clearStatus();
+    alert('Errore PDF: ' + err.message);
+  });
+}
 
-    function parseReceiptText(text) {
-      const lines = text.split(/
-+/).map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean);
-      const skip = /^(totale|subtotale|pagamento|contanti|carta|resto|iva|p\.iva|documento|saldo|grazie|arrivederci|bancomat|pos|importo|raccolta|spesa val|0[,.]30)/i;
-      const out = [];
-      for (const line of lines) {
-        if (skip.test(line)) continue;
-        let m = line.match(/^(.+?)\s+\d{1,2}[.,]\d{2}%\s+(-?\d{1,4}[.,]\d{2})\s*$/); // PAM 3 colonne
-        if (!m) m = line.match(/^(.+?)\s+(-?\d{1,4}[.,]\d{2})\s*$/); // standard
-        if (!m) continue;
-        let desc = m[1].replace(/^[A-Z]\s+/,'').trim();
-        const price = parseFloat(m[2].replace(',','.'));
-        if (!desc || isNaN(price) || price===0 || Math.abs(price)>9999) continue;
-        out.push({desc, price, isWine:false, uncertain:true, isDiscount:price<0});
+function processImage(file) {
+  var url = URL.createObjectURL(file);
+  $('preview').src = url;
+  $('preview').classList.add('on');
+  setStatus('OCR in corso...');
+  Tesseract.recognize(file, 'ita+eng', {
+    logger: function(m) {
+      if (m.status === 'recognizing text') {
+        setStatus('OCR... ' + Math.round((m.progress || 0) * 100) + '%');
       }
-      return out;
     }
+  }).then(function(result) {
+    processRawText(result.data.text || '');
+  }).catch(function(err) {
+    clearStatus();
+    alert('Errore OCR: ' + err.message);
+  });
+}
 
-    function parseSimpleLines(text) {
-      return text.split(/
-+/).map(l=>l.trim()).filter(Boolean).map(line => {
-        const m = line.match(/^(.+?)\s+(-?\d{1,4}[.,]\d{2})$/);
-        if (!m) return null;
-        const price = parseFloat(m[2].replace(',','.'));
-        return {desc:m[1].trim(), price, isWine:false, uncertain:true, isDiscount:price<0};
-      }).filter(Boolean);
-    }
-
-    async function classifyWithAI(rows, key) {
-      const payload = rows.map((r,i) => ({i, desc:r.desc, price:r.price}));
-      const prompt = `Analizza queste righe di scontrino italiano.
-Restituisci SOLO JSON valido come array.
-Formato: [{"i":0,"isWine":true,"cleanDesc":"Lambrusco","confidence":"high"}]
-
-Regole:
-- isWine=true per vino, birra, prosecco, spumante, champagne, lambrusco, grappa, amaro, gin, vodka, rum, whisky, aperitivi alcolici, qualsiasi vitigno DOC/DOCG/IGT
-- isWine=false per cibo, acqua, bibite, coperto, sconti, shopper
-- Montepulciano e Friulano sono VINI (isWine:true)
-- cleanDesc: descrizione breve e leggibile, rimuovi prefissi T/C/X iniziali
-- confidence: high | medium | low
-
-Righe: ${JSON.stringify(payload)}`;
-
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,messages:[{role:'user',content:[{type:'text',text:prompt}]}]})
-      });
-      if (resp.status===401) throw new Error('API key non valida');
-      if (!resp.ok) throw new Error('AI non disponibile: HTTP '+resp.status);
-      const data = await resp.json();
-      const txt = (data.content||[]).map(x=>x.text||'').join('
-');
-      const match = txt.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error('Risposta AI non valida');
-      const parsed = JSON.parse(match[0]);
-      const map = new Map(parsed.map(x=>[x.i,x]));
-      return rows.map((r,i) => {
-        const ai = map.get(i);
-        if (!ai) return {...r, isWine:guessWine(r.desc), uncertain:true};
-        return {...r, desc:ai.cleanDesc||r.desc, isWine:r.isDiscount?false:!!ai.isWine, uncertain:ai.confidence!=='high', isDiscount:r.price<0};
-      });
-    }
-
-    function guessWine(desc) {
-      const d = ' '+desc.toLowerCase()+' ';
-      return [' vino ',' rosso ',' bianco ',' rosato ',' prosecco ',' spumante ',' champagne ',
-        ' lambrusco ',' chianti ',' barolo ',' brunello ',' merlot ',' cabernet ',' sangiovese ',
-        ' pinot ',' vermentino ',' amarone ',' primitivo ',' verdicchio ',' moscato ',' barbera ',
-        ' nebbiolo ',' montepulciano ',' friulano ',' birra ',' beer ',' ipa ',' lager ',
-        ' grappa ',' amaro ',' gin ',' vodka ',' rum ',' whisky ',' spritz ',' aperol ',' campari '
-      ].some(k => d.includes(k));
-    }
-
-    function renderRows() {
-      const list = $('rowsList');
-      list.innerHTML = '';
-      state.rows.forEach((row, index) => {
-        const el = document.createElement('div');
-        el.className = 'row';
-        const desc = document.createElement('input');
-        desc.value = row.desc;
-        if (row.uncertain) desc.classList.add('uncertain');
-        desc.addEventListener('input', e => state.rows[index].desc = e.target.value);
-        const price = document.createElement('input');
-        price.type='number'; price.step='0.01';
-        price.value = Number(row.price).toFixed(2);
-        if (row.uncertain) price.classList.add('uncertain');
-        price.addEventListener('input', e => { state.rows[index].price=parseFloat(e.target.value||'0'); state.rows[index].isDiscount=state.rows[index].price<0; });
-        const tag = document.createElement('button');
-        if (row.isDiscount) {
-          tag.className='tag disc'; tag.textContent='Sconto';
-        } else {
-          tag.className = row.isWine ? 'tag wine' : 'tag food';
-          tag.textContent = row.isWine ? 'Vino' : 'Cibo';
-          tag.addEventListener('click', () => { state.rows[index].isWine=!state.rows[index].isWine; state.rows[index].uncertain=false; renderRows(); });
-        }
-        const del = document.createElement('button');
-        del.className='btn-ghost'; del.textContent='x';
-        del.addEventListener('click', () => { state.rows.splice(index,1); renderRows(); });
-        el.append(desc, price, tag, del);
-        list.appendChild(el);
-      });
-      $('rowsCard').classList.add('on');
-      $('resultCard').classList.remove('on');
-    }
-
-    function calculate() {
-      const wP = state.rows.filter(r=>r.isWine&&r.price>0).reduce((s,r)=>s+r.price,0);
-      const fP = state.rows.filter(r=>!r.isWine&&r.price>0).reduce((s,r)=>s+r.price,0);
-      const disc = state.rows.filter(r=>r.price<0).reduce((s,r)=>s+r.price,0);
-      const gross = wP+fP;
-      const wR = gross>0 ? wP/gross : 0;
-      const wine = wP + disc*wR;
-      const food = fP + disc*(1-wR);
-      const fS=food/3, wS=wine/2;
-      const A=fS+wS, B=fS+wS, C=fS;
-      $('totals').innerHTML = `
-        <div class="box wine"><div class="k">Totale vino</div><div class="v">EUR ${wine.toFixed(2)}</div></div>
-        <div class="box food"><div class="k">Totale cibo</div><div class="v">EUR ${food.toFixed(2)}</div></div>
-        <div class="box disc"><div class="k">Sconti</div><div class="v">EUR ${disc.toFixed(2)}</div></div>`;
-      $('people').innerHTML = `
-        <div class="person"><div class="name">Persona A</div><div class="amt">EUR ${A.toFixed(2)}</div><div class="sub">Cibo EUR ${fS.toFixed(2)} + Vino EUR ${wS.toFixed(2)}</div></div>
-        <div class="person"><div class="name">Persona B</div><div class="amt">EUR ${B.toFixed(2)}</div><div class="sub">Cibo EUR ${fS.toFixed(2)} + Vino EUR ${wS.toFixed(2)}</div></div>
-        <div class="person"><div class="name">Persona C</div><div class="amt">EUR ${C.toFixed(2)}</div><div class="sub">Solo cibo EUR ${fS.toFixed(2)}</div></div>`;
-      $('resultCard').classList.add('on');
-      $('resultCard').scrollIntoView({behavior:'smooth',block:'start'});
-    }
-
-    function loadDemo() {
-      state.rows = [
-        {desc:'Tagliere misto',price:14,isWine:false,uncertain:false,isDiscount:false},
-        {desc:'Pasta al ragu',price:12,isWine:false,uncertain:false,isDiscount:false},
-        {desc:'Lambrusco Grasparossa',price:16,isWine:true,uncertain:false,isDiscount:false},
-        {desc:'Acqua naturale',price:3,isWine:false,uncertain:false,isDiscount:false},
-        {desc:'Sconto fidelity',price:-4,isWine:false,uncertain:false,isDiscount:true}
-      ];
+function processRawText(rawText) {
+  setStatus('Analisi righe...');
+  var rows = parseReceiptText(rawText);
+  if (!rows.length) rows = parseSimpleLines(rawText);
+  if (!rows.length) {
+    clearStatus();
+    $('manualBox').classList.add('on');
+    $('manualText').value = rawText;
+    alert('Nessuna voce trovata. Correggi il testo.');
+    return;
+  }
+  var key = getKey();
+  if (key) {
+    setStatus('AI: classificazione vino/cibo...');
+    classifyWithAI(rows, key).then(function(classified) {
+      state.rows = classified;
       renderRows();
-    }
-
-    function resetAll() {
-      state.rows=[];
-      $('rowsList').innerHTML='';
-      $('rowsCard').classList.remove('on');
-      $('resultCard').classList.remove('on');
-      $('manualText').value='';
-      $('manualBox').classList.remove('on');
-      $('preview').src=''; $('preview').classList.remove('on');
       clearStatus();
+    }).catch(function(err) {
+      rows = rows.map(function(r) { return Object.assign({}, r, { isWine: guessWine(r.desc) }); });
+      state.rows = rows;
+      renderRows();
+      clearStatus();
+    });
+  } else {
+    state.rows = rows.map(function(r) { return Object.assign({}, r, { isWine: guessWine(r.desc) }); });
+    renderRows();
+    clearStatus();
+  }
+}
+
+function parseReceiptText(text) {
+  var lines = text.split('\n').map(function(l) { return l.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+  var skip = /^(totale|subtotale|pagamento|contanti|carta|resto|iva|p\.iva|documento|saldo|grazie|arrivederci|bancomat|pos|importo|raccolta|spesa val)/i;
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (skip.test(line)) continue;
+    var m = line.match(/^(.+?)\s+\d{1,2}[.,]\d{2}%\s+(-?\d{1,4}[.,]\d{2})\s*$/);
+    if (!m) m = line.match(/^(.+?)\s+(-?\d{1,4}[.,]\d{2})\s*$/);
+    if (!m) continue;
+    var desc = m[1].replace(/^[A-Z]\s+/, '').trim();
+    var price = parseFloat(m[2].replace(',', '.'));
+    if (!desc || isNaN(price) || price === 0 || Math.abs(price) > 9999) continue;
+    out.push({ desc: desc, price: price, isWine: false, uncertain: true, isDiscount: price < 0 });
+  }
+  return out;
+}
+
+function parseSimpleLines(text) {
+  return text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean).map(function(line) {
+    var m = line.match(/^(.+?)\s+(-?\d{1,4}[.,]\d{2})$/);
+    if (!m) return null;
+    var price = parseFloat(m[2].replace(',', '.'));
+    return { desc: m[1].trim(), price: price, isWine: false, uncertain: true, isDiscount: price < 0 };
+  }).filter(Boolean);
+}
+
+function classifyWithAI(rows, key) {
+  var payload = rows.map(function(r, i) { return { i: i, desc: r.desc, price: r.price }; });
+  var prompt = 'Analizza queste righe di scontrino italiano.\nRestituisci SOLO JSON array.\nFormato: [{"i":0,"isWine":true,"cleanDesc":"Lambrusco","confidence":"high"}]\n\nRegole:\n- isWine=true per vino, birra, prosecco, spumante, grappa, amaro, gin, vodka, rum, whisky, aperitivi alcolici, qualsiasi vitigno DOC/DOCG/IGT\n- Montepulciano e Friulano sono VINI (isWine:true)\n- isWine=false per cibo, acqua, bibite, coperto, sconti, shopper\n- cleanDesc: descrizione breve leggibile, rimuovi prefissi T/C/X iniziali\n- confidence: high | medium | low\n\nRighe: ' + JSON.stringify(payload);
+
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }]
+    })
+  }).then(function(resp) {
+    if (resp.status === 401) throw new Error('API key non valida');
+    if (!resp.ok) throw new Error('AI HTTP ' + resp.status);
+    return resp.json();
+  }).then(function(data) {
+    var txt = (data.content || []).map(function(x) { return x.text || ''; }).join('\n');
+    var match = txt.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Risposta AI non valida');
+    var parsed = JSON.parse(match[0]);
+    var map = {};
+    parsed.forEach(function(x) { map[x.i] = x; });
+    return rows.map(function(r, i) {
+      var ai = map[i];
+      if (!ai) return Object.assign({}, r, { isWine: guessWine(r.desc), uncertain: true });
+      return Object.assign({}, r, {
+        desc: ai.cleanDesc || r.desc,
+        isWine: r.isDiscount ? false : !!ai.isWine,
+        uncertain: ai.confidence !== 'high',
+        isDiscount: r.price < 0
+      });
+    });
+  });
+}
+
+function guessWine(desc) {
+  var d = ' ' + desc.toLowerCase() + ' ';
+  return [' vino ',' rosso ',' bianco ',' rosato ',' prosecco ',' spumante ',' champagne ',
+    ' lambrusco ',' chianti ',' barolo ',' brunello ',' merlot ',' cabernet ',' sangiovese ',
+    ' pinot ',' vermentino ',' amarone ',' primitivo ',' verdicchio ',' moscato ',' barbera ',
+    ' nebbiolo ',' montepulciano ',' friulano ',' birra ',' beer ',' ipa ',' lager ',
+    ' grappa ',' amaro ',' gin ',' vodka ',' rum ',' whisky ',' spritz ',' aperol ',' campari '
+  ].some(function(k) { return d.indexOf(k) !== -1; });
+}
+
+function renderRows() {
+  var list = $('rowsList');
+  list.innerHTML = '';
+  state.rows.forEach(function(row, index) {
+    var el = document.createElement('div');
+    el.className = 'row';
+
+    var desc = document.createElement('input');
+    desc.value = row.desc;
+    if (row.uncertain) desc.classList.add('uncertain');
+    desc.addEventListener('input', (function(i) { return function(e) { state.rows[i].desc = e.target.value; }; })(index));
+
+    var price = document.createElement('input');
+    price.type = 'number'; price.step = '0.01';
+    price.value = Number(row.price).toFixed(2);
+    if (row.uncertain) price.classList.add('uncertain');
+    price.addEventListener('input', (function(i) { return function(e) {
+      state.rows[i].price = parseFloat(e.target.value || '0');
+      state.rows[i].isDiscount = state.rows[i].price < 0;
+    }; })(index));
+
+    var tag = document.createElement('button');
+    if (row.isDiscount) {
+      tag.className = 'tag disc'; tag.textContent = 'Sconto';
+    } else {
+      tag.className = row.isWine ? 'tag wine' : 'tag food';
+      tag.textContent = row.isWine ? 'Vino' : 'Cibo';
+      tag.addEventListener('click', (function(i) { return function() {
+        state.rows[i].isWine = !state.rows[i].isWine;
+        state.rows[i].uncertain = false;
+        renderRows();
+      }; })(index));
     }
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js').then(r=>r.update()).catch(()=>{});
-    }
-  </script>
+    var del = document.createElement('button');
+    del.className = 'btn-ghost'; del.textContent = 'x';
+    del.addEventListener('click', (function(i) { return function() {
+      state.rows.splice(i, 1); renderRows();
+    }; })(index));
+
+    el.append(desc, price, tag, del);
+    list.appendChild(el);
+  });
+  $('rowsCard').classList.add('on');
+  $('resultCard').classList.remove('on');
+}
+
+function calculate() {
+  var wP = state.rows.filter(function(r) { return r.isWine && r.price > 0; }).reduce(function(s,r) { return s+r.price; }, 0);
+  var fP = state.rows.filter(function(r) { return !r.isWine && r.price > 0; }).reduce(function(s,r) { return s+r.price; }, 0);
+  var disc = state.rows.filter(function(r) { return r.price < 0; }).reduce(function(s,r) { return s+r.price; }, 0);
+  var gross = wP + fP;
+  var wR = gross > 0 ? wP / gross : 0;
+  var wine = wP + disc * wR;
+  var food = fP + disc * (1 - wR);
+  var fS = food / 3, wS = wine / 2;
+  var A = fS + wS, B = fS + wS, C = fS;
+
+  $('totals').innerHTML =
+    '<div class="box wine"><div class="k">Totale vino</div><div class="v">&#8364; ' + wine.toFixed(2) + '</div></div>' +
+    '<div class="box food"><div class="k">Totale cibo</div><div class="v">&#8364; ' + food.toFixed(2) + '</div></div>' +
+    '<div class="box disc"><div class="k">Sconti</div><div class="v">&#8364; ' + disc.toFixed(2) + '</div></div>';
+
+  $('people').innerHTML =
+    '<div class="person"><div class="name">Persona A</div><div class="amt">&#8364; ' + A.toFixed(2) + '</div><div class="sub">Cibo &#8364; ' + fS.toFixed(2) + ' + Vino &#8364; ' + wS.toFixed(2) + '</div></div>' +
+    '<div class="person"><div class="name">Persona B</div><div class="amt">&#8364; ' + B.toFixed(2) + '</div><div class="sub">Cibo &#8364; ' + fS.toFixed(2) + ' + Vino &#8364; ' + wS.toFixed(2) + '</div></div>' +
+    '<div class="person"><div class="name">Persona C</div><div class="amt">&#8364; ' + C.toFixed(2) + '</div><div class="sub">Solo cibo &#8364; ' + fS.toFixed(2) + '</div></div>';
+
+  $('resultCard').classList.add('on');
+  $('resultCard').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function loadDemo() {
+  state.rows = [
+    { desc:'Tagliere misto', price:14, isWine:false, uncertain:false, isDiscount:false },
+    { desc:'Pasta al ragu', price:12, isWine:false, uncertain:false, isDiscount:false },
+    { desc:'Lambrusco Grasparossa', price:16, isWine:true, uncertain:false, isDiscount:false },
+    { desc:'Acqua naturale', price:3, isWine:false, uncertain:false, isDiscount:false },
+    { desc:'Sconto fidelity', price:-4, isWine:false, uncertain:false, isDiscount:true }
+  ];
+  renderRows();
+}
+
+function resetAll() {
+  state.rows = [];
+  $('rowsList').innerHTML = '';
+  $('rowsCard').classList.remove('on');
+  $('resultCard').classList.remove('on');
+  $('manualText').value = '';
+  $('manualBox').classList.remove('on');
+  $('preview').src = ''; $('preview').classList.remove('on');
+  clearStatus();
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js').then(function(r) { r.update(); }).catch(function() {});
+}
+</script>
 </body>
 </html>
