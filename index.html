@@ -103,7 +103,7 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--ink);min-
 <body>
 <div class="header">
   <h1>🍽 Dividi <em>Scontrino</em></h1>
-  <p>Divisione automatica del conto &nbsp;·&nbsp; <span style="color:var(--terra2);font-weight:500">v2.1</span></p>
+  <p>Divisione automatica del conto &nbsp;·&nbsp; <span style="color:var(--terra2);font-weight:500">v2.2</span></p>
 </div>
 <div class="wrap">
   <div class="card">
@@ -229,50 +229,51 @@ Esempio:
 "T MOLISANA PASSATA   4,00%   1,50" -> {"desc":"Molisana passata","price":1.50,"isWine":false}\`;
 
 async function analyzePDF(file){
-  // Renderizza il PDF come immagine ad alta risoluzione e manda a Claude
   try{
-    setStatus('Rendering PDF…');
-    const ab=await file.arrayBuffer();
-    const pdf=await pdfjsLib.getDocument({data:ab}).promise;
-    const cvs=[];
+    setStatus('Lettura PDF…');
+    const ab  = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:ab}).promise;
+    let text = '';
     for(let i=1;i<=pdf.numPages;i++){
-      setStatus('Pagina '+i+'/'+pdf.numPages+'…');
-      const page=await pdf.getPage(i);
-      const vp=page.getViewport({scale:3.0});
-      const cv=document.createElement('canvas');
-      cv.width=vp.width;cv.height=vp.height;
-      await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-      cvs.push(cv);
+      const page    = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      // Ricostruisce le righe mantenendo la struttura spaziale
+      const items = content.items;
+      let lastY = null;
+      for(const item of items){
+        const y = Math.round(item.transform[5]);
+        if(lastY !== null && Math.abs(y - lastY) > 3) text += '\n';
+        text += item.str + ' ';
+        lastY = y;
+      }
+      text += '\n';
     }
-    let final;
-    if(cvs.length===1){final=cvs[0];}
-    else{
-      const th=cvs.reduce((s,cv)=>s+cv.height,0);
-      final=document.createElement('canvas');
-      final.width=cvs[0].width;final.height=th;
-      const ctx=final.getContext('2d');let y=0;
-      for(const cv of cvs){ctx.drawImage(cv,0,y);y+=cv.height;}
-    }
-    const blob=await new Promise(r=>final.toBlob(r,'image/jpeg',0.95));
-    await analyzeImage(blob);
-  }catch(e){noStatus();showManual('Errore PDF: '+e.message);}
+    setStatus('Analisi testo…');
+    const parsed = parseReceiptText(text);
+    if(parsed.length === 0){ showManual('Nessuna voce trovata. Incolla il testo manualmente.'); return; }
+    rows = parsed;
+    await classifyWines();
+  }catch(e){
+    noStatus();
+    console.error(e);
+    showManual('Errore PDF: ' + e.message);
+  }
 }
 
-async function analyzeImage(file, attempt=1){
-  let key=getKey();
+async function analyzeImage(file){
+  let key = getKey();
   if(!key){
-    const k=prompt('Inserisci la tua API key Anthropic:');
-    if(!k){showManual('API key necessaria.');return;}
-    saveKey(k);key=k.trim();
+    const k = prompt('Inserisci la tua API key Anthropic:');
+    if(!k){ showManual('API key necessaria per analizzare immagini.'); return; }
+    saveKey(k); key = k.trim();
   }
   try{
-    setStatus(attempt===1?'Compressione immagine…':'Nuovo tentativo ('+attempt+'/3)…');
-    const comp=await compress(file);
-    const mb=(comp.size/1024/1024).toFixed(1);
-    const b64=await toBase64(comp);
-
-    setStatus('Analisi con Claude AI… ('+mb+' MB)');
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    setStatus('Compressione immagine…');
+    const comp = await compress(file);
+    const mb   = (comp.size/1024/1024).toFixed(1);
+    const b64  = await toBase64(comp);
+    setStatus('Analisi con Claude AI… (' + mb + ' MB)');
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
@@ -289,20 +290,11 @@ async function analyzeImage(file, attempt=1){
         ]}]
       })
     });
-
-    if(resp.status===401){saveKey('');noStatus();showManual('API key non valida. Aggiornala con il tasto apposito.');return;}
-    if((resp.status===529||resp.status===500)&&attempt<3){
-      await new Promise(r=>setTimeout(r,attempt*2000));
-      return analyzeImage(file,attempt+1);
-    }
-    if(!resp.ok){
-      const e=await resp.json().catch(()=>({}));
-      throw new Error(e?.error?.message||'HTTP '+resp.status);
-    }
-    const data=await resp.json();
-    const text=(data.content||[]).map(b=>b.text||'').join('\n').trim();
+    if(resp.status===401){saveKey('');noStatus();showManual('API key non valida.');return;}
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+resp.status);}
+    const data = await resp.json();
+    const text = (data.content||[]).map(b=>b.text||'').join('\n').trim();
     parseClaudeResponse(text);
-
   }catch(e){
     noStatus();
     console.error(e);
@@ -310,17 +302,57 @@ async function analyzeImage(file, attempt=1){
   }
 }
 
-async function callClaude(key,content,maxTokens){
-  return fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key':key,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true'
-    },
-    body:JSON.stringify({model:'claude-opus-4-5',max_tokens:maxTokens,messages:[{role:'user',content}]})
-  });
+// Classifica i vini usando Claude (solo nomi, niente immagini)
+async function classifyWines(){
+  const key = getKey();
+  if(!key){
+    noStatus();
+    renderRows();
+    toast('✓ ' + rows.length + ' voci (classificazione vino locale)');
+    return;
+  }
+  try{
+    setStatus('Classificazione vini…');
+    const nonDisc = rows.filter(r=>!r.isDiscount);
+    const lista   = nonDisc.map((r,i)=>i+'. '+r.desc).join('\n');
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:512,
+        messages:[{role:'user',content:`Questi prodotti sono di uno scontrino italiano.
+Dimmi quali sono bevande alcoliche (vino, birra, superalcolici).
+Rispondi SOLO con JSON: [{"i":0,"w":true},{"i":1,"w":false}]
+dove i=indice, w=true se alcolico.
+
+${lista}`}]
+      })
+    });
+    if(resp.ok){
+      const data = await resp.json();
+      const txt  = (data.content||[]).map(b=>b.text||'').join('').trim();
+      const m    = txt.match(/\[[\s\S]*\]/);
+      if(m){
+        const cls = JSON.parse(m[0]);
+        cls.forEach(({i,w})=>{ if(nonDisc[i]) nonDisc[i].isWine=!!w; });
+      }
+    }
+    noStatus();
+    renderRows();
+    const nv = rows.filter(r=>r.isWine).length;
+    toast('✓ ' + rows.length + ' voci · ' + nv + ' vini');
+  }catch(e){
+    noStatus();
+    console.error('classifyWines error:',e);
+    renderRows();
+    toast('✓ ' + rows.length + ' voci');
+  }
 }
 
 
@@ -447,6 +479,50 @@ Solo JSON, nient'altro.`}], 512);
     renderRows();
     toast('✓ '+rows.length+' voci');
   }
+}
+
+// Parser locale per testo scontrino (PDF estratto o testo incollato)
+function parseReceiptText(text){
+  const lines  = text.split('\n').map(l=>l.trim()).filter(l=>l.length>1);
+  const parsed = [];
+  const skipRe = /^(totale|subtotale|di cui|^iva\b|imposta|pagamento|pagam|contanti|contant|carta\b|bancomat|pos\b|resto\b|cambio|importo pag|receipt|benven|grazie|welcome|arriveder|documento comm|descrizione\b|raccolta|saldo|spesa val|punti accu|codice a|p\.iva|www\.|http|0[,.]30)/i;
+
+  for(const line of lines){
+    if(skipRe.test(line)) continue;
+    if(/^[-=*_]{3,}/.test(line)) continue;
+
+    let desc=null, price=null;
+
+    // Formato PAM: NOME   22,00%   -1,90
+    const pamRe = /^(.+?)\s{2,}\d{1,2}[,.]\d{2}%\s+(-?\d{1,4}[,.]\d{2})\s*$/;
+    let m = line.match(pamRe);
+    if(m){ desc=m[1].trim(); price=parseFloat(m[2].replace(',','.')); }
+
+    // Formato standard: NOME   8,45
+    if(!m){
+      const stdRe = /^(.+?)\s{2,}(-?\d{1,4}[,.]\d{2})\s*[€$]?\s*$/;
+      m = line.match(stdRe);
+      if(m){ desc=m[1].trim(); price=parseFloat(m[2].replace(',','.')); }
+    }
+
+    // Formato semplice: Nome 8.45
+    if(!m){
+      const simRe = /^(.+?)\s+(-?\d{1,4}[,.]\d{2})\s*$/;
+      m = line.match(simRe);
+      if(m){ desc=m[1].trim(); price=parseFloat(m[2].replace(',','.')); }
+    }
+
+    if(!desc || price===null || isNaN(price) || price===0 || Math.abs(price)>999) continue;
+
+    // Pulizia
+    desc = desc.replace(/\s+\d{1,2}[,.]\d{2}%\s*$/,'').trim(); // rimuovi IVA residua
+    desc = desc.replace(/^[TCXBFMR]\s+/,'').trim();             // rimuovi prefisso PAM
+    if(!desc || desc.length<2) continue;
+
+    const isDiscount = price < 0;
+    parsed.push({desc, price, isWine: guessWine(desc), uncertain:false, isDiscount});
+  }
+  return parsed;
 }
 
 function guessWine(desc){
